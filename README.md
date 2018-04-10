@@ -1,4 +1,4 @@
-#xml2xpath
+# xml2xpath
 Print XPath present on XML file. If an XSD file is provided and *xmlbeans* package is installed, try to create an XML instance and print the XPath from it.
 
 Taking [this XSD example from w3schools](https://www.w3schools.com/xml/schema_example.asp) the script will print
