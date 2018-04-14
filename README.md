@@ -1,5 +1,5 @@
 # xml2xpath
-Print XPath present on XML file. If an XSD file is provided and *xmlbeans* package is installed, try to create an XML instance and print the XPath from it.
+Print XPath present on XML file. If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.
 
 Taking [this XSD example from w3schools](https://www.w3schools.com/xml/schema_example.asp) the script will print
 
@@ -39,7 +39,7 @@ NAME
 
 SYNOPSIS
 ========
-	xml2xpath.sh [-h] [-d file -t <tag name>] [-x file]
+	xml2xpath.sh [-h] [-d file -f <tag name>] [-x file -t]
 
 DESCRIPTION
 ===========
@@ -47,12 +47,12 @@ Print XPath present on XML file. If an XSD file is provided and **xmlbeans** pac
 
 OPTIONS
 ========
-     -d   xsd file path.
+    Basic options
+        -h   print this help message.
+    XSD options
+        -d   xsd file path.
+        -f   name of the root element to build xml from xsd.
+    XML options
+        -t   print XML element tree as provided by xmllint 'du' shell command.
+        -x   xml file, will take precedence over -d option.
 
-     -h   print this help message.
-
-     -f   tag name to start searching for xpath strings.
-
-     -t   print XML element tree as provided by xmllint 'du' shell command.
-
-     -x   xml file, not to use with -d option.

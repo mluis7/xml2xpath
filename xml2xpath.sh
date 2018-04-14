@@ -10,26 +10,25 @@ NAME
 $script_name - Print XPath present on xml or (if possible) xsd files.
 
 SYNOPSIS
-$script_name [-h] [-d file -t <tag name>] [-x file]
+$script_name [-h] [-d file -f <tag name>] [-x file -t]
 
 DESCRIPTION
-     foo .
+ Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file. 
 
 OPTIONS
-     -d   xsd file path.
-
+  Basic options
      -h   print this help message.
-
-     -f   tag name to start searching for xpath strings.
-
+  XSD options
+     -d   xsd file path.
+     -f   name of the root element to build xml from xsd.
+  XML options
      -t   print XML element tree as provided by xmllint 'du' shell command.
-
-     -x   xml file, not to use with -d option.
+     -x   xml file, will take precedence over -d option.
 EOF-MAN
 }
 
 function print_usage(){
-	echo "Usage: $script_name [-h] [-d file -t <tag name>] [-x file]"
+	echo "Usage: $script_name [-h] [-d file -f <tag name>] [-x file -t]"
 }
 
 xsd=""
@@ -50,18 +49,17 @@ function get_indent_level(){
 # generate XML from XSD. Requires xmlbeans package.
 #---------------------------------------------------------------------------------------
 function create_xml_instance(){
-	if [ -x /usr/bin/xsd2inst ]; then
-		if [ -z "$xsd" ]; then
-			echo -e "FATAL: XSD file path can not be empty if -d option is used." > /dev/stderr
-			exit 1
-		fi
-		xml_file=$(mktemp)
-		echo -e "Creating XML instance from $xsd as $xml_file starting at element $tag1\n"
-	    XMLBEANS_LIB='/usr/share/java/xmlbeans/' xsd2inst "$xsd" -name "$tag1" > "$xml_file"
-	else
+	if [ ! -x /usr/bin/xsd2inst ]; then
 		echo "FATAL: package xmlbeans is not installed but is required for -d option. Aborting." > /dev/stderr
 		exit 1
 	fi
+	if [ -z "$xsd" ]; then
+		echo -e "FATAL: XSD file path can not be empty if -d option is used." > /dev/stderr
+		exit 1
+	fi
+	xml_file=$(mktemp)
+	echo -e "Creating XML instance from $xsd as $xml_file starting at element $tag1\n"
+    XMLBEANS_LIB='/usr/share/java/xmlbeans/' xsd2inst "$xsd" -name "$tag1" > "$xml_file"
 }
 
 #---------------------------------------------------------------------------------------
@@ -71,11 +69,24 @@ function get_xml_tree(){
 	if [ -n "$xml_file" ]; then
 		echo "du /" | xmllint --shell "$xml_file" | grep -v '\/'
 	else
-	echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
+		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
 		exit 1
 	fi
 }
 
+#---------------------------------------------------------------------------------------
+# Check initial conditions
+#---------------------------------------------------------------------------------------
+function init_env(){
+	if [ -z "$xsd" ] && [ -z "$xml_file" ]; then
+		echo -e "FATAL: At least on of -d or -x must be provided.\n" > /dev/stderr
+		print_usage
+		exit 1
+	elif [ -n "$xsd" ] && [ -n "$xml_file" ]; then
+		echo -e "WARNING: both -d and -x were provided, -d will be ignored.\n" > /dev/stderr
+		xsd=''
+	fi
+}
 while getopts d:f:htx: arg
 do
   case $arg in
@@ -91,11 +102,7 @@ do
   esac
 done
 
-if [ -z "$xsd" ] && [ -z "$xml_file" ]; then
-	echo -e "FATAL: At least on of -d or -x must be provided.\n" > /dev/stderr
-	print_usage
-	exit 1
-fi
+init_env
 if [ -n "$xsd" ]; then
 	create_xml_instance
 fi
