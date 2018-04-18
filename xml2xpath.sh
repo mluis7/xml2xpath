@@ -1,5 +1,8 @@
 #!/bin/bash
-
+#
+# Find xpath present on an XML file or (if possible) and XSD file.
+# source repo: https://github.com/mluis7/xml2xpath
+# 
 script_name=$(basename $0)
 #---------------------------------------------------------------------------------------
 # Help.
@@ -22,7 +25,7 @@ OPTIONS
      -d   xsd file path.
      -f   name of the root element to build xml from xsd.
   XML options
-     -s   absolute or relative path to start printing XPath from, e.g.: /shiporder/shipto ,//shipto 
+     -s   start printing XPath at an absolute or relative xpath, e.g.: /shiporder/shipto ,//shipto 
      -t   print XML element tree as provided by xmllint 'du' shell command.
      -x   xml file, will take precedence over -d option.
      
@@ -47,6 +50,7 @@ tag1=""
 du_path="/"
 xprefix=""
 print_tree=0
+declare -a xpath_full
 
 #---------------------------------------------------------------------------------------
 # get white space indentation as multiple dots, count them and divide by 2
@@ -70,7 +74,7 @@ function create_xml_instance(){
 		exit 1
 	fi
 	xml_file=$(mktemp)
-	echo -e "Creating XML instance from $xsd as $xml_file starting at element $tag1\n"
+	echo -e "Creating XML instance starting at element $tag1 from $xsd\n"
     XMLBEANS_LIB='/usr/share/java/xmlbeans/' xsd2inst "$xsd" -name "$tag1" > "$xml_file"
 }
 
@@ -81,7 +85,7 @@ function get_xml_tree(){
 	if [ -n "$xml_file" ]; then
 		echo "du $du_path" | xmllint --shell "$xml_file" | grep -v '\/'
 	else
-		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
+		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file" > /dev/stderr
 		exit 1
 	fi
 }
@@ -126,38 +130,38 @@ fi
 xml_tree=$(get_xml_tree)
 
 if [ "$print_tree" -eq 1 ]; then
+	echo -e "XML tree:\n"
 	echo -e "$xml_tree\n"
 fi
 
 indent_levels=$(get_indent_level "$xml_tree")
 max_level=$(echo "$indent_levels" | tail -n1)
-declare -a xpath_arr
-declare -a xpath_all
+declare -a xpath_arr # tmp array to hold tree partially
+declare -a xpath_all # save all found xpath
 
-# generate xpaths
-echo "$xml_tree" | { 
-	while IFS='' read line; do
-	    indent=$(echo "$line" | sed -nre 's/^( +).*/\1/p' | tr ' ' '.')
-	    ilvl=$((${#indent}/2))
-	    prev_lvl=$(($ilvl - 1))
-	
-	    if [ "$ilvl" -eq 0 ]; then
-	        xpath_arr[0]="/$line"
-	        xpath="${xpath_arr[0]}"
-	    elif [ "$ilvl" -le "$max_level" ]; then
-	        xpath="${xpath_arr[$prev_lvl]}/$(echo "$line" | tr -d ' ')"
-	        xpath_arr[$ilvl]="$xpath"
-	    fi
-		#echo "$xprefix$xpath"
-		idx=${#xpath_all[*]}
-		xpath_all[$idx]="$xprefix$xpath"
-	done
-	
-	for i in "${xpath_all[@]}"; do 
-		echo "$i";
-	done
-}
+# generate xpaths from tree based on indentation
+while IFS='' read line; do
+    indent=$(echo "$line" | sed -nre 's/^( +).*/\1/p' | tr ' ' '.')
+    ilvl=$((${#indent}/2))
+    prev_lvl=$(($ilvl - 1))
 
+    if [ "$ilvl" -eq 0 ]; then
+        xpath_arr[0]="/$line"
+        xpath="${xpath_arr[0]}"
+    elif [ "$ilvl" -le "$max_level" ]; then
+        xpath="${xpath_arr[$prev_lvl]}/$(echo "$line" | tr -d ' ')"
+        xpath_arr[$ilvl]="$xpath"
+    fi
+
+	idx=${#xpath_all[*]}
+	xpath_all[$idx]="$xprefix$xpath"
+done< <(echo "$xml_tree")
+
+echo -e "Found XPath:\n"
+printf "%s\n" ${xpath_all[*]}
+
+echo
+	
 if [ -n "$xsd" ]; then
 	rm "$xml_file"
 fi
