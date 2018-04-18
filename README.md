@@ -70,7 +70,16 @@ EXAMPLES
 ========
         # print all xpaths and elements tree
         xml2xpath.sh -t -x test.xml
+        
         # print xpaths starting at //shipto element
         xml2xpath.sh -s '//shipto' -x test.xml
+        
         # print xpaths from generated xml
         xml2xpath.sh -d test.xsd -f shiporder
+        
+        # print relative xpaths specifying an element with an attribute
+        xml2xpath.sh -x /usr/share/wireshark/diameter/etsie2e4.xml -s '//avp[@name="Globally-Unique-Address"]'
+        
+        # same as previous based on an inner attribute
+        xml2xpath.sh -x /usr/share/wireshark/diameter/etsie2e4.xml -s '//avp[grouped/gavp[@name="V6-Transport-Address"]]'
+        
