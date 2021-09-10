@@ -46,7 +46,8 @@ OPTIONS
      -l   Use HTML parser
 
   XML options
-     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns'.
+     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overrriden with -o option.
+     -o   Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
      -p   Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
      -x   xml file, will take precedence over -d option.
      
@@ -62,6 +63,12 @@ EXAMPLES
 	
 	# Use namespaces, show absolute paths and xmllint shell messages
 	xml2xpath.sh -a -n -g -x wiki.xml
+	
+	# Add a namespace definition and use it in a relative expression
+	xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+	
+	# Html file with absolute paths option
+	xml2xpath.sh -a -n -l test.html
 
 REPORTING BUGS
         at: https://github.com/mluis7/xml2xpath
@@ -90,21 +97,22 @@ print_tree=0
 uniq_xp=1
 ns_cmd='cat'
 ns_prefix='defaultns'
+defns=''
 lint_cmd=(xmllint --shell)
 dbg_cmd=(grep -v '\/ >')
 
 #---------------------------------------------------------------------------------------
 # get white space indentation as multiple dots, count them and divide by 2
 #---------------------------------------------------------------------------------------
-function get_indent_as_dots(){
-	echo
+function space2dots(){
+	sed -nre '/^ / s/^( +).*/\1/p' | tr ' ' '.'
 }
 
 #---------------------------------------------------------------------------------------
 # get white space indentation as multiple dots, count them and divide by 2
 #---------------------------------------------------------------------------------------
 function get_indent_level(){
-    for c in $(echo "$@" | sed -nre '/^ / s/^( +).*/\1/p' | tr ' ' '.' | sort | uniq); do
+    for c in $(echo "$@" | space2dots | sort | uniq); do
         echo $((${#c}/2)) 
     done
 }
@@ -144,10 +152,43 @@ function set_html_opts(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
 	if [ -n "$xml_file" ]; then
-		(echo "setrootns" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
+		#(echo "setrootns" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
+		#(echo "setrootns"; [ -n "$defns" ] && echo "setns defaultns=" && echo "setns $defns"; echo "du $du_path") | tee /dev/stderr | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
+		(set_ns_prefix; echo "du $du_path") | tee /dev/stderr | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
 	else
 		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file" > /dev/stderr
 		exit 1
+	fi
+}
+
+#---------------------------------------------------------------------------------------
+# Print all xpaths
+#---------------------------------------------------------------------------------------
+function add_namespace_prefix(){
+#	echo ">>>>>> ns_prefix: ${ns_prefix}" > /dev/stderr
+#	echo ">>>>>> defns: ${defns}" > /dev/stderr
+#	ns_prefix=$(cut -d '=' -f1 <<<"$defns")
+	while read -r line; do
+		if ! grep -q ':' <<<"$line" ;then
+			sed -re "s/([/])([^/@]+)/\1${ns_prefix}:\2/g" <<<"$line"
+		else
+			idxx=2
+			if grep -q '^[/][/]' <<<"$line"; then
+				idxx=3
+			fi
+			echo "$line" | gawk -v pr="${ns_prefix}" -v idx="$idxx" 'BEGIN{FS="[/]"; OFS="/"}{for(i=idx; i<=NF; i++) {if($i !~ /[@:]/){ $i = pr ":" $i}}} END { print $0 }'
+		fi
+	done
+}
+
+#---------------------------------------------------------------------------------------
+# Set namespaces
+#---------------------------------------------------------------------------------------
+function set_ns_prefix(){
+	echo "setrootns"
+	if [ -n "$defns" ] ;then
+		echo "setns defaultns="
+		echo "setns $defns"
 	fi
 }
 
@@ -159,7 +200,12 @@ function print_all_xpath(){
  		print_unique_xpath
 	else
 		for pth in "${xpath_all[@]}"; do
-	        printf "whereis %s\nwhereis %s/@*\n" "${pth}" "${pth}"
+			if [ "$isHtml" -eq 0 ]; then
+				fixedPath="$(echo "$pth" | add_namespace_prefix)"
+			else
+				fixedPath="$pth"
+			fi
+	        printf "whereis %s\nwhereis %s/@*\n" "${fixedPath}" "${fixedPath}"
 	    done 
 	fi
 }
@@ -169,8 +215,13 @@ function print_all_xpath(){
 #---------------------------------------------------------------------------------------
 function print_unique_xpath(){
     for pth in "${xpath_all[@]}"; do
-        printf "whereis %s\nwhereis %s/@*\n" "${pth}" "${pth}"
-    done | nl -nln | tr -s -d '\011' ' ' | sort -k3,3 | uniq --skip-fields=2 | sort -n -k1,1 | cut -d ' ' -f2,3
+    	if [ "$isHtml" -eq 0 ]; then
+			fixedPath="$(echo "$pth" | add_namespace_prefix)"
+		else
+			fixedPath="$pth"
+		fi
+		printf "whereis %s\nwhereis %s/@*\n" "${fixedPath}" "${fixedPath}"
+    done | nl -nln | tr -s -d '\011\r' ' ' | sort -k3,3 | uniq --skip-fields=2 | sort -n -k1,1 | cut -d ' ' -f2,3
 }
 
 #---------------------------------------------------------------------------------------
@@ -190,7 +241,7 @@ function init_env(){
 	fi
 }
 
-while getopts ad:D:f:ghl:np:rs:tx: arg
+while getopts ad:D:f:ghl:no:p:rs:tx: arg
 do
   case $arg in
     a) abs_path=1;;
@@ -204,9 +255,10 @@ do
 	f) tag1=$OPTARG;;
 	g) dbg_cmd=(cat);;
 	n|p) [ -n "$OPTARG" ] && ns_prefix=$OPTARG
-         #ns_cmd="sed -re s/([/])([^:/@]+)([/]|$)/\1${ns_prefix}:\2\3/g"
-         ns_cmd="sed -re s/([/])([^/@]+)/\1${ns_prefix}:\2/g"
         ;;
+    o) defns="$OPTARG"
+    	ns_prefix=$(cut -d '=' -f1 <<<"$defns")
+    	;;
     r) uniq_xp=0;;
 	s) du_path=$OPTARG;;
 	t) print_tree=1;;
@@ -240,7 +292,7 @@ declare -a xpath_all # save all found xpath
 
 # generate xpaths from tree based on indentation
 while IFS='' read -r line; do
-    indent=$(echo "$line" | sed -nre 's/^( +).*/\1/p' | tr ' ' '.')
+    indent=$(echo "$line" | space2dots)
     # divide by 2 since xmllint uses 2 spaces to indent.
     # Only indentation level is needed, no the indentation itself.
     indent_lvl=$((${#indent}/2))
@@ -269,10 +321,8 @@ if [ "$abs_path" -eq 1 ];then
     if [ "$isHtml" -eq 1 ]; then
     	print_all_xpath | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
     else
-        (echo "setrootns" ; print_all_xpath) | $ns_cmd | "${lint_cmd[@]}" "$xml_file" 2>&1 | "${dbg_cmd[@]}"
+        (set_ns_prefix ; print_all_xpath) | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
     fi
-    
-    #print_unique_xpath
 else
     echo -e "Found XPath:\n"
     printf "%s\n" "${xpath_all[@]}"
