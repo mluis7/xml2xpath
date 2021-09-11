@@ -229,21 +229,28 @@ OPTIONS
 
   XML options
      -n   Set namespaces found on root element. Default namespace prefix is 'defaultns'.
+     -o   Add a namespace definition in the form <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
      -p   Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
      -x   xml file, will take precedence over -d option.
      
 EXAMPLES
-	# print all xpaths and elements tree
-	xml2xpath.sh -t -x test.xml
-	
-	# print xpaths starting at //shipto element
-	xml2xpath.sh -s '//shipto' -x test.xml
-	
-	# print xpaths from generated xml
-	xml2xpath.sh -d test.xsd -f shiporder
-	
-	# Use namespaces, show absolute paths and xmllint shell messages
-	xml2xpath.sh -a -n -g -x wiki.xml
+        # print all xpaths and elements tree
+        xml2xpath.sh -t -x test.xml
+
+        # print xpaths starting at //shipto element
+        xml2xpath.sh -s '//shipto' -x test.xml
+
+        # print xpaths from generated xml
+        xml2xpath.sh -d test.xsd -f shiporder
+
+        # Use namespaces, show absolute paths and xmllint shell messages
+        xml2xpath.sh -a -n -g -x wiki.xml
+
+        # Add a namespace definition and use it in a relative expression
+        xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+
+        # Html file with absolute paths option
+        xml2xpath.sh -a -n -l test.html
 
 REPORTING BUGS
         at: https://github.com/mluis7/xml2xpath

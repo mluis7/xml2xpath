@@ -46,7 +46,7 @@ OPTIONS
      -l   Use HTML parser
 
   XML options
-     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overrriden with -o option.
+     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
      -o   Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
      -p   Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
      -x   xml file, will take precedence over -d option.
@@ -96,7 +96,7 @@ abs_path=0
 print_tree=0
 uniq_xp=1
 ns_cmd='cat'
-ns_prefix='defaultns'
+ns_prefix=''
 defns=''
 lint_cmd=(xmllint --shell)
 dbg_cmd=(grep -v '\/ >')
@@ -152,9 +152,7 @@ function set_html_opts(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
 	if [ -n "$xml_file" ]; then
-		#(echo "setrootns" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
-		#(echo "setrootns"; [ -n "$defns" ] && echo "setns defaultns=" && echo "setns $defns"; echo "du $du_path") | tee /dev/stderr | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
-		(set_ns_prefix; echo "du $du_path") | tee /dev/stderr | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
+		(set_ns_prefix; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
 	else
 		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file" > /dev/stderr
 		exit 1
@@ -165,18 +163,20 @@ function get_xml_tree(){
 # Print all xpaths
 #---------------------------------------------------------------------------------------
 function add_namespace_prefix(){
-#	echo ">>>>>> ns_prefix: ${ns_prefix}" > /dev/stderr
-#	echo ">>>>>> defns: ${defns}" > /dev/stderr
-#	ns_prefix=$(cut -d '=' -f1 <<<"$defns")
 	while read -r line; do
-		if ! grep -q ':' <<<"$line" ;then
-			sed -re "s/([/])([^/@]+)/\1${ns_prefix}:\2/g" <<<"$line"
-		else
-			idxx=2
-			if grep -q '^[/][/]' <<<"$line"; then
-				idxx=3
+		if [ -n "$ns_prefix" ]; then
+			# xpath expression with no prefix
+			if ! grep -q ':' <<<"$line" ;then
+				sed -re "s/([/][/]?)([^/@]+)/\1${ns_prefix}:\2/g" <<<"$line"
+			else
+				idxx=2
+				if grep -q '^[/][/]' <<<"$line"; then
+					idxx=3
+				fi
+				echo "$line" | gawk -v pr="${ns_prefix}" -v idx="$idxx" 'BEGIN{FS="[/]"; OFS="/"}{for(i=idx; i<=NF; i++) {if($i !~ /[@:]/){ $i = pr ":" $i}}} END { print $0 }'
 			fi
-			echo "$line" | gawk -v pr="${ns_prefix}" -v idx="$idxx" 'BEGIN{FS="[/]"; OFS="/"}{for(i=idx; i<=NF; i++) {if($i !~ /[@:]/){ $i = pr ":" $i}}} END { print $0 }'
+		else
+			echo "$line"
 		fi
 	done
 }
@@ -185,10 +185,14 @@ function add_namespace_prefix(){
 # Set namespaces
 #---------------------------------------------------------------------------------------
 function set_ns_prefix(){
-	echo "setrootns"
-	if [ -n "$defns" ] ;then
-		echo "setns defaultns="
-		echo "setns $defns"
+	if [ -n "$ns_prefix" ];then
+		echo "setrootns"
+		if [ -n "$defns" ] ;then
+			echo "setns defaultns="
+			echo "setns $defns"
+		fi
+	else
+		echo
 	fi
 }
 
@@ -236,7 +240,9 @@ function init_env(){
 		echo -e "WARNING: both -d and -x were provided, -d will be ignored.\n" > /dev/stderr
 		xsd=''
 	fi
-	if echo "$du_path" | grep  -q '[/][/]' ; then
+	if grep -q '^[/][/]' <<<"$du_path" || [ "$(echo "$du_path" | tr -s '/' ' ' | wc -w)" -gt 1 ] ; then
+		xprefix='//'
+	else
 		xprefix='/'
 	fi
 }
@@ -255,6 +261,7 @@ do
 	f) tag1=$OPTARG;;
 	g) dbg_cmd=(cat);;
 	n|p) [ -n "$OPTARG" ] && ns_prefix=$OPTARG
+		 [ -z "$OPTARG" ] && ns_prefix="defaultns"
         ;;
     o) defns="$OPTARG"
     	ns_prefix=$(cut -d '=' -f1 <<<"$defns")
@@ -300,7 +307,7 @@ while IFS='' read -r line; do
 
     if [ "$indent_lvl" -eq 0 ]; then
         #no indent level, xpath root
-        xpath_arr[0]="/$line"
+        xpath_arr[0]="$line"
         xpath="${xpath_arr[0]}"
     elif [ "$indent_lvl" -le "$max_level" ]; then
         # append element to previous by indentation level
