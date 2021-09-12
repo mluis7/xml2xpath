@@ -95,6 +95,7 @@ To change that, pass `-o` option with the desired definition in the form `<prefi
 Try this command:
 
 `xml2xpath.sh -a -g -n -o 'ns1=http://www.w3.org/2005/Atom' -s '//ns1:entry[descendant::ns1:name[.="author2"]]' -t -x tests/resources/wiki.xml`
+
 ## XPath expressions at a given element
 Passing `-s` option to show xpath expressions starting at an specific element or elements.
 
@@ -170,19 +171,23 @@ Adding `p` allows to pass a namespace prefix to search for (experimental).
 
 ## XPaths on HTML
 
-`xml2xpath.sh -a -g -s '//div/div/h3[1]' -l test.html`
+`xml2xpath.sh -a -s '//table[2]/thead/tr' -l resources/test.html`
 
 Result:
 
-    Found Xpath (absolute):
-
-    / > whereis /@*
-    / > whereis //h3
-    /div/div/h3[1]
-    /div/div/h3[2]
-    /div/div/h3[3]
-    /div/div/h3[4]
-    / > 
+	Namespaces:
+	
+	  xml http://www.w3.org/XML/1998/namespace
+	
+	
+	Found Xpath (absolute):
+	
+	/html/body/table[2]/thead/tr
+	/html/body/table[2]/thead/tr/@class
+	/html/body/table[2]/thead/tr/th[1]
+	/html/body/table[2]/thead/tr/th[2]
+	/html/body/table[2]/thead/tr/th[3]
+	/html/body/table[2]/thead/tr/th[4]
 
 ## Generate an XML from an XSD and show its XPaths
 If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.
