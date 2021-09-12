@@ -1,0 +1,8 @@
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:soap1="http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx">
+<soap:Body>
+    <incident xmlns="http://example.com">
+        <Company type="String">Test</Company>
+    </incident>
+</soap:Body>
+</soap:Envelope>
+
