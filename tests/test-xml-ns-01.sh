@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-# Example file
-#https://github.com/HL7/C-CDA-Examples/blob/master/General/Parent%20Document%20Replace%20Relationship/CCD%20Parent%20Document%20Replace%20(C-CDAR2.1).xml
+# Test file from:
+# https://github.com/HL7/C-CDA-Examples/blob/master/General/Parent%20Document%20Replace%20Relationship/CCD%20Parent%20Document%20Replace%20(C-CDAR2.1).xml
 #
 # Namespaces on root element, default namespace: urn:hl7-org:v3
 
@@ -10,7 +10,7 @@
 
 source test-lib-src.sh
 dbg=1
-xml_file="$HOME/tmp/HL7.xml"
+xml_file="resources/HL7.xml"
 test_opts=()
 test_type_opts=(-x "$xml_file")
 rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'

@@ -1,29 +1,41 @@
 # xml2xpath
-Extract and list XPath expressions from XML file. Latest version shows XPath attributes as well.
+Extract and list XPath expressions from XML/HTML file. Latest version shows XPath attributes as well.
+
+A wrapper around `xmllint` tool that provides convenience options to inspect documents listing namespaces and xpaths expressions.
 
 Table of contents
 =================
 
 * [Basic usage](#basic-usage)
 * [Absolute paths and namespaces](#absolute-paths-and-namespaces)
-* [Using found XPaths](#using-found-xPaths)
+* [Default namespaces](#default-namespaces)
+* [XPath expressions at a given element](#xpath-expressions-at-a-given-element)
+* [Using found XPaths](#using-found-xpaths)
 * [XPaths on HTML](#xpaths-on-html)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Script help](#help)
 
 ## Basic usage
-Get all element xpaths from an XML file. To show attribute XPaths also add `-a` (absolute XPaths)
+Get all element xpaths from an XML file. To show attribute XPaths also, add `-a` (absolute XPaths)
 
 `xml2xpath.sh -x soap.xml`
 
 Result:
 
-    Found XPath:
-
-    /soap:Envelope
-    /soap:Envelope/soap:Body
-    /soap:Envelope/soap:Body/operation
-    /soap:Envelope/soap:Body/operation/name
+	Namespaces:
+	
+	  default http://example.com
+	  soap1 http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx
+	  soap http://schemas.xmlsoap.org/soap/envelope/
+	  xml http://www.w3.org/XML/1998/namespace
+	
+	Found XPath:
+	
+	/
+	/soap:Envelope
+	/soap:Envelope/soap:Body
+	/soap:Envelope/soap:Body/incident
+	/soap:Envelope/soap:Body/incident/Company
 
 
 
@@ -43,7 +55,7 @@ Given an XML with namespaces, the following command will show absolute paths in 
     /*/*[8]/*[3]/@type
     /*/*[8]/*[3]/@href
 
-Adding `-g` would show the qualfied xpath used to generate absolute paths
+Adding `-g` would show the qualified xpath used to generate absolute paths
 
     / > whereis /defaultns:feed/defaultns:entry
     /*/*[8]
@@ -69,6 +81,42 @@ Could generate
 
     /*/*[8]/*[6]
     /*/*[9]/*[6]
+
+## Default namespaces
+This start root element has a default namespace, i.e. without a prefix
+
+`<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">`
+
+Passing `-n` will map that namespace to a `defaultns` prefix by default.
+To change that, pass `-o` option with the desired definition in the form `<prefix>:<uri>`
+
+`xml2xpath.sh -n -o 'ns1=http://www.w3.org/2005/Atom' -s '//ns1:entry[descendant::ns1:name[.="author2"]]' -x tests/resources/wiki.xml`
+
+Try this command:
+
+`xml2xpath.sh -a -g -n -o 'ns1=http://www.w3.org/2005/Atom' -s '//ns1:entry[descendant::ns1:name[.="author2"]]' -t -x tests/resources/wiki.xml`
+## XPath expressions at a given element
+Passing `-s` option to show xpath expressions starting at an specific element or elements.
+
+`xml2xpath.sh -n -s '//defaultns:entry/defaultns:author' -x wiki.xml`
+
+Result:
+
+	Namespaces:
+	
+	  default http://www.w3.org/2005/Atom
+	  xml http://www.w3.org/XML/1998/namespace
+	
+	Found XPath:
+	
+	//defaultns:entry/defaultns:author
+	//defaultns:entry/defaultns:author
+	//defaultns:entry/defaultns:author/name
+	//defaultns:entry/defaultns:author
+	//defaultns:entry/defaultns:author/name
+	//defaultns:entry/defaultns:author
+	//defaultns:entry/defaultns:author/name
+
 
 ## Using found XPaths
 A couple of commands to show how to use found Xpaths:
@@ -96,13 +144,13 @@ Result showing `rel`, `type` and `href` attributes:
     -------
     type="text/html"
     -------
-    href="https://en.wikipedia.org/w/index.php?title=Tranquility_Base_Hotel_%26_Casino&amp;diff=1042409471&amp;oldid=1042409347"
+    href="https://en.wikipedia.org/w/index.php?title=Title%202"
     -------
     rel="alternate"
     -------
     type="text/html"
     -------
-    href="https://en.wikipedia.org/w/index.php?title=Pettibone_(company)&amp;diff=1042409464&amp;oldid=1042409224"
+    href="https://en.wikipedia.org/w/index.php?title=some_title"
     / >
 
 Find `@rel` attribute under a specific path with this shell command

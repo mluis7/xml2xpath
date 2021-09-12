@@ -46,6 +46,10 @@ function print_test_descr(){
 # Run test case
 #---------------------------------------------------------------------------------------
 function test_run(){
+	if [ ! -f "${test_type_opts[${#test_type_opts[@]} - 1]}" ]; then
+		echo "ERROR file not found: ${test_type_opts[${#test_type_opts[@]} - 1]}"  | show_color
+		exit 1
+	fi
 	print_test_descr "$1"
 	../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}" 2>&1 1>/dev/null | show_errors
 }

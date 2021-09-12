@@ -9,11 +9,11 @@
 
 
 source test-lib-src.sh
-
-xml_file="$HOME/tmp/test-r.html"
+dbg=1
+xml_file="resources/test.html"
 test_opts=()
 test_type_opts=(-l "$xml_file")
-rel_xpath='//p[5]/font[3]'
+rel_xpath='//table[2]/thead/tr'
 
 # Test case descriptions
 TC01="Basic test (-l)"
@@ -33,7 +33,7 @@ test_opts=(-s "${rel_xpath}")
 test_run "TC03"
 test_result "$?"
 
-# FIXME: all elements returned
+# FIXME: all elements returned. if -s is passed xpaths should discard first du level and prepend xpaths with $du_path
 test_opts=(-a -s "${rel_xpath}")
 test_run "TC04"
 test_result "$?"

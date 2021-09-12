@@ -152,7 +152,7 @@ function set_html_opts(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
 	if [ -n "$xml_file" ]; then
-		(set_ns_prefix; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file" | grep -v '\/[^ >]*'
+		(set_ns_prefix; echo "ls //namespace::*"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
 	else
 		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file" > /dev/stderr
 		exit 1
@@ -240,8 +240,10 @@ function init_env(){
 		echo -e "WARNING: both -d and -x were provided, -d will be ignored.\n" > /dev/stderr
 		xsd=''
 	fi
+	# Set xpath expression start according to -s option
 	if grep -q '^[/][/]' <<<"$du_path" || [ "$(echo "$du_path" | tr -s '/' ' ' | wc -w)" -gt 1 ] ; then
-		xprefix='//'
+		#xprefix='//'
+		xprefix="$du_path"
 	else
 		xprefix='/'
 	fi
@@ -285,8 +287,15 @@ init_env
 if [ -n "$xsd" ]; then
 	create_xml_instance
 fi
-# get elements tree with xmllint
-xml_tree=$(get_xml_tree)
+# get XML namespaces and structure with xmllint
+# 'dir xxxxxxxxx' kinda NoOp that provides a record separator for awk
+IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk 'BEGIN{ RS="dir xxxxxxxxx\n" }{ print $0 "¬" }'  && printf '\0' )
+
+echo -e "Namespaces:\n"
+printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/  \1 \2/p' | sort | uniq
+echo
+
+xml_tree=$(grep -v '\/[^ >]*' <<<"${xml_info[1]}")
 
 if [ "$print_tree" -eq 1 ]; then
 	echo -e "XML tree:\n$xml_tree\n"
@@ -305,9 +314,14 @@ while IFS='' read -r line; do
     indent_lvl=$((${#indent}/2))
     prev_lvl=$((indent_lvl - 1))
 
-    if [ "$indent_lvl" -eq 0 ]; then
+    if [ "$indent_lvl" -eq 0 ] && [ "$du_path" == '/' ]; then
         #no indent level, xpath root
         xpath_arr[0]="$line"
+        xpath="${xpath_arr[0]}"
+    elif [ "$indent_lvl" -eq 0 ] && [ "$du_path" != '/' ]; then
+    	# an xpath expression has been provided with -x so first element is discarded
+    	# as $prefix will supply the beginning of the expression.
+    	xpath_arr[0]=""
         xpath="${xpath_arr[0]}"
     elif [ "$indent_lvl" -le "$max_level" ]; then
         # append element to previous by indentation level
@@ -318,6 +332,7 @@ while IFS='' read -r line; do
 
 	idx=${#xpath_all[*]}
 	xpath_all[$idx]="${xprefix}${xpath}"
+	#printf ">>>> Found xpath: %s\n" "${xpath} - $du_path"
 done < <(echo "$xml_tree")
 
 #printf ">>>> %s\n" "${xpath_all[@]}"
