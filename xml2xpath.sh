@@ -220,12 +220,12 @@ function print_all_xpath(){
 function print_unique_xpath(){
     for pth in "${xpath_all[@]}"; do
     	if [ "$isHtml" -eq 0 ]; then
-			fixedPath="$(echo "$pth" | add_namespace_prefix)"
+			fixedPath="$(echo "${pth}" | add_namespace_prefix)"
 		else
-			fixedPath="$pth"
+			fixedPath="${pth}"
 		fi
 		printf "whereis %s\nwhereis %s/@*\n" "${fixedPath}" "${fixedPath}"
-    done | nl -nln | tr -s -d '\011\r' ' ' | sort -k3,3 | uniq --skip-fields=2 | sort -n -k1,1 | cut -d ' ' -f2,3
+    done | nl -s '¬' -nln | tr -s -d '\011\r' ' ' | sort -k3,3 | uniq --skip-fields=2 | sort -n -k1,1 | cut -d '¬' -f2,3
 }
 
 #---------------------------------------------------------------------------------------
