@@ -81,7 +81,7 @@ Result (expanded):
 	​    <prototype>: Array []
 
 
-**Generic numeric XPaths to Xpaths with Element names  **  
+**Generic numeric XPaths to Xpaths with Element names**  
 
 Given this xpaths generated with `-a -g` it says there are 4 `entry` elements where the first has the absolute position 8 for any element.
 
