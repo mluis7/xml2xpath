@@ -7,11 +7,12 @@ Table of contents
 =================
 
 * [Basic usage](#basic-usage)
+* [Using found XPaths](#using-found-xpaths)
+* [XPaths on HTML](#xpaths-on-html)
 * [Absolute paths and namespaces](#absolute-paths-and-namespaces)
 * [Default namespaces](#default-namespaces)
 * [XPath expressions at a given element](#xpath-expressions-at-a-given-element)
 * [Using found XPaths](#using-found-xpaths)
-* [XPaths on HTML](#xpaths-on-html)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Script help](#help)
 
@@ -37,7 +38,117 @@ Result:
 	/soap:Envelope/soap:Body/incident
 	/soap:Envelope/soap:Body/incident/Company
 
+## Using found XPaths
+Found relative or absolute XPaths expressions can be tested on browser development tools.
 
+**Inspector or Elements tabs**  
+Browsers might expect elements on xpath that do not exists on html source.  
+The script found:
+
+`/html/body/center[2]/table/tr[2]/td[1]`
+
+But browser will accept (`tbody` must be added)
+
+`/html/body/center[2]/table/tbody/tr[2]/td[1]` 
+
+Relative expressions are also valid. All below could point to the same `td` element
+
+	//center[2]/table[@id='t1']//tr[2]/td[1]
+	//center[2]/*//tr[2]/td[1]
+	//center[2]/descendant::*/td[1]
+	//center[2]/descendant::*/td[position()=1]
+
+**Console**  
+Firefox and Chrome offer `$x` built-in object to search elements using absolute or relative xpath expressions.  
+Hovering over the found elements on console might highlight the element on the page.  
+Clicking on the elements will show the element on Inspector tab
+
+`$x("/html/body/center[2]/table/tbody/tr")`
+
+Result:
+
+`(4) [tr, tr, tr, tr]`
+
+Or for a single element:  
+
+`$x("//center[2]/table/tbody/tr[2]")`
+
+Result (expanded):
+
+	(1) […]	​
+	    0: <tr>​
+	    length: 1
+	​    <prototype>: Array []
+
+
+**Generic numeric XPaths to Xpaths with Element names  **  
+
+Given this xpaths generated with `-a -g` it says there are 4 `entry` elements where the first has the absolute position 8 for any element.
+
+    / > whereis //defaultns:entry
+    /*/*[8]
+    /*/*[9]
+    /*/*[10]
+    /*/*[11]
+
+The first one `/*/*[8]` would be equivalent to `//defaultns:entry[1]`, the eight element and the first `entry` element for that xpath expression.
+
+Find all attributes under a qualified path with this shell command
+
+    (echo "setrootns"; echo "cat /defaultns:feed/defaultns:entry/defaultns:link/@*") | xmllint --shell wiki.xml 
+    
+Result showing `rel`, `type` and `href` attributes:
+
+    / > setrootns
+    / > cat /defaultns:feed/defaultns:entry/defaultns:link/@*
+    -------
+    rel="alternate"
+    -------
+    type="text/html"
+    -------
+    href="https://en.wikipedia.org/w/index.php?title=Title%202"
+    -------
+    rel="alternate"
+    -------
+    type="text/html"
+    -------
+    href="https://en.wikipedia.org/w/index.php?title=some_title"
+    / >
+
+Find `@rel` attribute under a specific path with this shell command
+
+    (echo "setrootns"; echo "cat /*/*[8]/*[3]/@rel") | xmllint --shell wiki.xml 
+
+Result of specific `@rel` attribute:
+
+    / > setrootns
+    / > cat /*/*[8]/*[3]/@rel
+    -------
+    rel="alternate"
+
+ 
+ 
+Adding `p` allows to pass a namespace prefix to search for (experimental).
+
+## XPaths on HTML
+
+`xml2xpath.sh -a -s '//table[2]/thead/tr' -l resources/test.html`
+
+Result:
+
+	Namespaces:
+	
+	  xml http://www.w3.org/XML/1998/namespace
+	
+	
+	Found Xpath (absolute):
+	
+	/html/body/table[2]/thead/tr
+	/html/body/table[2]/thead/tr/@class
+	/html/body/table[2]/thead/tr/th[1]
+	/html/body/table[2]/thead/tr/th[2]
+	/html/body/table[2]/thead/tr/th[3]
+	/html/body/table[2]/thead/tr/th[4]
 
 ## Absolute paths and namespaces
 Given an XML with namespaces, the following command will show absolute paths in numeric format
@@ -117,77 +228,6 @@ Result:
 	//defaultns:entry/defaultns:author/name
 	//defaultns:entry/defaultns:author
 	//defaultns:entry/defaultns:author/name
-
-
-## Using found XPaths
-A couple of commands to show how to use found Xpaths:
-
-Given this xpaths generated with `-a -g` it says there are 4 `entry` elements where the first has the absolute position 8 for any element.
-
-    / > whereis //defaultns:entry
-    /*/*[8]
-    /*/*[9]
-    /*/*[10]
-    /*/*[11]
-
-The first one `/*/*[8]` would be equivalent to `//defaultns:entry[1]`, the eight element and the first `entry` element for that xpath expression.
-
-Find all attributes under a qualified path with this shell command
-
-    (echo "setrootns"; echo "cat /defaultns:feed/defaultns:entry/defaultns:link/@*") | xmllint --shell wiki.xml 
-    
-Result showing `rel`, `type` and `href` attributes:
-
-    / > setrootns
-    / > cat /defaultns:feed/defaultns:entry/defaultns:link/@*
-    -------
-    rel="alternate"
-    -------
-    type="text/html"
-    -------
-    href="https://en.wikipedia.org/w/index.php?title=Title%202"
-    -------
-    rel="alternate"
-    -------
-    type="text/html"
-    -------
-    href="https://en.wikipedia.org/w/index.php?title=some_title"
-    / >
-
-Find `@rel` attribute under a specific path with this shell command
-
-    (echo "setrootns"; echo "cat /*/*[8]/*[3]/@rel") | xmllint --shell wiki.xml 
-
-Result of specific `@rel` attribute:
-
-    / > setrootns
-    / > cat /*/*[8]/*[3]/@rel
-    -------
-    rel="alternate"
-
- 
- 
-Adding `p` allows to pass a namespace prefix to search for (experimental).
-
-## XPaths on HTML
-
-`xml2xpath.sh -a -s '//table[2]/thead/tr' -l resources/test.html`
-
-Result:
-
-	Namespaces:
-	
-	  xml http://www.w3.org/XML/1998/namespace
-	
-	
-	Found Xpath (absolute):
-	
-	/html/body/table[2]/thead/tr
-	/html/body/table[2]/thead/tr/@class
-	/html/body/table[2]/thead/tr/th[1]
-	/html/body/table[2]/thead/tr/th[2]
-	/html/body/table[2]/thead/tr/th[3]
-	/html/body/table[2]/thead/tr/th[4]
 
 ## Generate an XML from an XSD and show its XPaths
 If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.
