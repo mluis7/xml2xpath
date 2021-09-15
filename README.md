@@ -250,7 +250,7 @@ Or
 All at once with `test-all.sh` or one at a time
 
      cd tests
-     ./test-
+     ./test-all.sh
      
      ./test-html-base.sh 
 
