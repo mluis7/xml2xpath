@@ -13,6 +13,7 @@ Table of contents
 * [Default namespaces](#default-namespaces)
 * [XPath expressions at a given element](#xpath-expressions-at-a-given-element)
 * [Using found XPaths](#using-found-xpaths)
+* [TL;DR](#tldr)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Script help](#help)
 
@@ -228,6 +229,45 @@ Result:
 	//defaultns:entry/defaultns:author/name
 	//defaultns:entry/defaultns:author
 	//defaultns:entry/defaultns:author/name
+
+## TL;DR
+
+> You see, in this world there's two kinds of people, my friend: Those with loaded guns and those who dig. You dig. (The Good, The Bad and The Ugly)
+
+... those with TL;DR, and those who read. You read. 
+
+Just kidding :-D
+
+A common use case could be to start passing the xpath expression of a known element in the tree
+
+    xml2xpath.sh -a -s "//table[@id[.='t1']]" -l resources/test.html
+
+Or
+
+    xml2xpath.sh -a -g -s //table[@id[.='t1'] and descendant::tr[@class='headerRow']] -l resources/test.html
+
+## Running tests
+All at once with `test-all.sh` or one at a time
+
+     cd tests
+     ./test-
+     
+     ./test-html-base.sh 
+
+Result:
+
+	TC01 : Basic test (-l)
+	  Command: ../xml2xpath.sh  -l resources/test.html
+	PASSED
+    ...
+    ...
+	TC06 : HTML relative paths (-s) containing axes expression axes::elem
+	  Command: ../xml2xpath.sh -a -s //table[@id[.='t1'] and descendant::tr[@class='headerRow']] -l resources/test.html
+	PASSED
+
+Running the test command given in result as shown (adding missing quotes if needed :-p )
+
+    ../xml2xpath.sh -a -s "//table[@id[.='t1'] and descendant::tr[@class='headerRow']]" -l resources/test.htm
 
 ## Generate an XML from an XSD and show its XPaths
 If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.
