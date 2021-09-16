@@ -244,13 +244,14 @@ _You read._
 
 :smirk: :satisfied:
 
-Start by passing the xpath expression of a known element in the tree and get the xpath expression of the elements under it.
+Start by passing the xpath expression of a known element in the tree and get the xpath expression of the elements under it.  
+Try these commands over already provided samples:
 
-    xml2xpath.sh -a -s "//table[@id[.='t1']]" -l resources/test.html
+    ./xml2xpath.sh -a -s "//table[@id[.='t1']]" -l tests/resources/test.html
 
 Or
 
-    xml2xpath.sh -a -g -s //table[@id[.='t1'] and descendant::tr[@class='headerRow']] -l resources/test.html
+    ./xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x tests/resources/HL7.xml
 
 ## Running tests
 Smoke tests for the script to quickly verify that changes did not break any functionality.
