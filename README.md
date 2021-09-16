@@ -2,6 +2,7 @@
 Extract and list XPath expressions from XML/HTML file. Latest version shows XPath attributes as well.
 
 A wrapper around `xmllint` tool that provides convenience options to inspect documents listing namespaces and xpaths expressions.
+By default, shows xpaths expressions starting at the root element but it can start at a predefined element passed from command line as an xpath expression.
 
 Table of contents
 =================
@@ -232,13 +233,18 @@ Result:
 
 ## TL;DR
 
-> You see, in this world there's two kinds of people, my friend: Those with loaded guns and those who dig. You dig. (The Good, The Bad and The Ugly)
+> You see, in this world there's two kinds of people, my friend:  
+> Those with loaded guns and those who dig.  
+> You dig.   
+> 
+> (The Good, The Bad and The Ugly)
 
-... those with TL;DR, and those who read. You read. 
+_... those with TL;DR, and those who read._  
+_You read._
 
-Just kidding :-D
+:smirk: :satisfied:
 
-A common use case could be to start passing the xpath expression of a known element in the tree
+Start by passing the xpath expression of a known element in the tree and get the xpath expression of the elements under it.
 
     xml2xpath.sh -a -s "//table[@id[.='t1']]" -l resources/test.html
 
@@ -247,7 +253,10 @@ Or
     xml2xpath.sh -a -g -s //table[@id[.='t1'] and descendant::tr[@class='headerRow']] -l resources/test.html
 
 ## Running tests
-All at once with `test-all.sh` or one at a time
+Smoke tests for the script to quickly verify that changes did not break any functionality.
+Tests results show the tested command which can be tried on console to witness how those options work.
+
+Run all at once with `test-all.sh` or one at a time
 
      cd tests
      ./test-all.sh
@@ -256,18 +265,21 @@ All at once with `test-all.sh` or one at a time
 
 Result:
 
-	TC01 : Basic test (-l)
-	  Command: ../xml2xpath.sh  -l resources/test.html
-	PASSED
-    ...
-    ...
-	TC06 : HTML relative paths (-s) containing axes expression axes::elem
-	  Command: ../xml2xpath.sh -a -s //table[@id[.='t1'] and descendant::tr[@class='headerRow']] -l resources/test.html
-	PASSED
+	*** HTML tests ***
 
-Running the test command given in result as shown (adding missing quotes if needed :-p )
+	TC01   : Basic test (-l)
+	cmd    : ../xml2xpath.sh  -l resources/test.html
+	PASSED
+	...
+	...
 
-    ../xml2xpath.sh -a -s "//table[@id[.='t1'] and descendant::tr[@class='headerRow']]" -l resources/test.htm
+Print more details by running as
+
+    dbg=1 ./test-all.sh
+
+The command used for testing is shown in details. Run it to see it in action (adding missing quotes if needed :-p )
+
+    ../xml2xpath.sh -a -s "//table[@id[.='t1'] and descendant::tr[@class='headerRow']]" -l resources/test.html
 
 ## Generate an XML from an XSD and show its XPaths
 If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.

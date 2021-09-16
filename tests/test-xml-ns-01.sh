@@ -5,16 +5,13 @@
 #
 # Namespaces on root element, default namespace: urn:hl7-org:v3
 
-# TODO: warning: failed to load external entity
-
-
 source test-lib-src.sh
-dbg=1
 xml_file="resources/HL7.xml"
 test_opts=()
 test_type_opts=(-x "$xml_file")
 rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'
 
+echo "*** XML tests - namespaces on root element ***"
 # Test case descriptions
 TC01="Basic test (-x)"
 TC02="Replace defaulns prefix, relative path"

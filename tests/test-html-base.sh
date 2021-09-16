@@ -3,13 +3,8 @@
 # Example file
 # https://xp-dev.com/svn/playgrnd/XMLExamples/readme.html
 #
-# Namespaces on root element, default namespace: urn:hl7-org:v3
-
-# TODO: warning: failed to load external entity
-
 
 source test-lib-src.sh
-dbg=1
 xml_file="resources/test.html"
 test_opts=()
 test_type_opts=(-l "$xml_file")
@@ -22,7 +17,9 @@ TC03="HTML relative paths (-s)"
 TC04="HTML absolute paths for relative expression (-a -s)"
 TC05="HTML absolute paths with duplicates (-a -r)"
 TC06="HTML relative paths (-s) containing axes expression axes::elem"
+# TODO: invalid html 
 
+echo "*** HTML tests ***"
 test_run "TC01"
 test_result "$?"
 

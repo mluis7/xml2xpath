@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 
-dbg=0
+[ -z "$dbg" ] && dbg=0
 
 #---------------------------------------------------------------------------------------
 # Verify test case result and return result and description
@@ -13,8 +13,11 @@ function test_result(){
 	tc_result="FAILED"
 	if [ "$1" -eq "$retval" ]; then
 		tc_result="PASSED"
+		echo "${tc_result}"
+	else
+		echo "${tc_result}" | show_color
 	fi
-	echo "${tc_result}"
+	
 }
 
 function show_color(){
@@ -28,10 +31,9 @@ function show_color(){
 #---------------------------------------------------------------------------------------
 function show_errors(){
 	if [ "$dbg" -eq 1 ]; then
-		echo -e "  Command: ../xml2xpath.sh ${test_opts[*]}" "${test_type_opts[*]}" > /dev/stderr
-		tee /dev/stderr 2> >(show_color) | grep -q 'XPath error'
+		tee /dev/stderr 2> >(show_color) | grep -Eq 'XPath error|No xpath found'
 	else
-		grep -q 'XPath error'
+		grep -Eq 'XPath error|No xpath found'
 	fi
 }
 
@@ -39,7 +41,10 @@ function show_errors(){
 # Run test case
 #---------------------------------------------------------------------------------------
 function print_test_descr(){
-	echo -e "\n$1 : ${!1}"
+	echo -e "\n$1   : ${!1}"
+	if [ "$dbg" -eq 1 ]; then
+		echo "cmd    : ../xml2xpath.sh ${test_opts[*]} ${test_type_opts[*]}"
+	fi
 }
 
 #---------------------------------------------------------------------------------------
