@@ -14,7 +14,7 @@ rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'
 echo "*** XML tests - namespaces on root element ***"
 # Test case descriptions
 TC01="Basic test (-x)"
-TC02="Replace defaulns prefix, relative path"
+TC02="Replace 'defaultns' prefix (-o), start at relative path (-s)"
 TC03="Find nodes using namespaces (-n)"
 TC04="Find nodes by absolute xpath using namespaces (-a -n)"
 TCN01="NEGATIVE TEST - Find nodes by absolute xpath using namespaces (missing -n)"
@@ -22,7 +22,7 @@ TCN01="NEGATIVE TEST - Find nodes by absolute xpath using namespaces (missing -n
 test_run "TC01"
 test_result "$?"
 
-# PASSED: Replace defaulns prefix, relative path
+# PASSED: Replace 'defaultns' prefix, relative path
 test_opts=(-o 'defns=urn:hl7-org:v3' -s '//defns:addr')
 #xml2xpath.sh "${test_opts[@]}" -x "$xml_file" | grep -q 'XPath error'
 test_run "TC02"

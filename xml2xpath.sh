@@ -9,7 +9,7 @@ script_name=$(basename "$0")
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
 #dbg_log="$HOME/tmp/a-sh-debug.log.$$"
-#PS4='+($?) $BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
+#PS4='+($?) $(date "+%s.%N")\011:$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
 
 #---------------------------------------------------------------------------------------
@@ -18,68 +18,57 @@ script_name=$(basename "$0")
 usage_str="$script_name [-h] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]"
 function print_help(){
 	cat<<EOF-MAN
-NAME
-  $script_name - Print XPath present on xml or (if possible) xsd files.
+Print XPath present on xml or (if possible) xsd files. Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file.
 
-SYNOPSIS
-  $script_name [-h] [COMMON OPTIONS] [XSD OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
-  $usage_str
+Usage: $usage_str
+       $script_name [-h] [COMMON OPTIONS] [XSD OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
 
-DESCRIPTION
- Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file. 
 
-OPTIONS
-  Basic options
-     -h   print this help message.
-  XSD options
-     -d   xsd file path.
-     -D   Same as -d but saves created xml instance to <xsd file path>.xml
-     -f   name of the root element to build xml from xsd.
+Options:
 
-  XML/HTML Common Options
-    -a   Show absolute Xpaths. Use -g too to add details. -s is used to filter but absolute paths are shown.
-    -g   Print xmllint command for debugging or clarity.
-    -r   Print repeated xpaths when -a is used. For debugging only.
-    -s   Start printing XPath at an absolute or relative xpath, e.g.: /shiporder/shipto ,//shipto
-          Must contain namespace prefix if needed. Examples: //defaultns:entry, //xs:element
-    -t   print XML element tree as provided by xmllint 'du' shell command.
-          
-  HTML options
-     -l   Use HTML parser
+Basic:
+  -h    print this help message.
+  -v    print version
 
-  XML options
-     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
-     -o   Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
-     -p   Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
-     -x   xml file, will take precedence over -d option.
-     
-EXAMPLES
-	# print all xpaths and elements tree
-	xml2xpath.sh -t -x test.xml
+XML/HTML Common Options:
+  -a    Show absolute Xpaths. Use -g too to add details. -s is used to filter but absolute paths are shown.
+  -g    Print xmllint command for debugging or clarity. Implies -a.
+  -r    Print repeated xpaths when -a is used. For debugging only.
+  -s    Start printing XPath at an absolute or relative xpath, e.g.: /shiporder/shipto, //shipto.
+          Must contain namespace prefix if needed. e.g.: //defaultns:entry, //xs:element
+  -t    print XML element tree as provided by xmllint 'du' shell command.      
+
+HTML options:
+  -l    Use HTML parser
+
+XML options:
+  -n    Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
+  -o    Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
+  -p    Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
+  -x    xml file, will take precedence over -d option.
+
+XSD options:
+  -d    xsd file path.
+  -D    Same as -d but saves created xml instance to <xsd file path>.xml
+  -f    name of the root element to build xml from xsd.
+  
+Examples:
+
+  Print all xpaths and elements tree                                xml2xpath.sh -t -x test.xml
+
+  Print xpaths starting at //shipto element                         xml2xpath.sh -s '//shipto' -x test.xml
 	
-	# print xpaths starting at //shipto element
-	xml2xpath.sh -s '//shipto' -x test.xml
-	
-	# print xpaths from generated xml
-	xml2xpath.sh -d test.xsd -f shiporder
-	
-	# Use namespaces, show absolute paths and xmllint shell messages
-	xml2xpath.sh -a -n -g -x wiki.xml
-	
-	# Add a namespace definition and use it in a relative expression
-	xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
-	
-	# Html file with absolute paths option
-	xml2xpath.sh -a -n -l test.html
+  Print xpaths from generated xml                                   xml2xpath.sh -a -f shiporder -d tests/resources/shiporder.xsd 
 
-REPORTING BUGS
-        at: https://github.com/mluis7/xml2xpath
+  Use namespaces, show absolute paths and xmllint shell messages    xml2xpath.sh -a -n -g -x wiki.xml
+	
+  Add a namespace definition and use it in a relative expression    xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+	
+  Html file with absolute paths option                              xml2xpath.sh -a -n -l test.html
 
-AUTHOR
-       Written by Luis Muñoz
+Reporting bugs:
+  https://github.com/mluis7/xml2xpath/issues
 
-SEE ALSO
-       Full documentation at: https://github.com/mluis7/xml2xpath
 EOF-MAN
 }
 
@@ -99,23 +88,17 @@ print_tree=0
 uniq_xp=1
 ns_prefix=''
 defns=''
+fs='¬'
+
+# commands as array
 lint_cmd=(xmllint --shell)
 dbg_cmd=(grep -v '\/ >')
 
 #---------------------------------------------------------------------------------------
-# get white space indentation as multiple dots, count them and divide by 2
+# print to stderr
 #---------------------------------------------------------------------------------------
-function space2dots(){
-	sed -nEe '/^ / s/^( +).*/\1/p' | tr ' ' '.'
-}
-
-#---------------------------------------------------------------------------------------
-# get white space indentation as multiple dots, count them and divide by 2
-#---------------------------------------------------------------------------------------
-function get_indent_level(){
-    for c in $(echo "$@" | space2dots | sort | uniq); do
-        echo $((${#c}/2)) 
-    done
+function log_error(){
+	echo -e "$@" > /dev/stderr
 }
 
 #---------------------------------------------------------------------------------------
@@ -123,11 +106,11 @@ function get_indent_level(){
 #---------------------------------------------------------------------------------------
 function create_xml_instance(){
 	if [ ! -x /usr/bin/xsd2inst ]; then
-		echo "FATAL: packages xmlbeans, xmlbeans-scripts are not installed but are required for -d option. Aborting." > /dev/stderr
+		log_error "FATAL: packages xmlbeans, xmlbeans-scripts are not installed but are required for -d option. Aborting."
 		exit 1
 	fi
 	if [ -z "$xsd" ]; then
-		echo -e "FATAL: XSD file path can not be empty if -d option is used." > /dev/stderr
+		log_error "FATAL: XSD file path can not be empty if -d option is used."
 		exit 1
 	fi
 	if [ -z "$xml_file_tmp" ]; then
@@ -149,29 +132,32 @@ function set_html_opts(){
 }
 
 #---------------------------------------------------------------------------------------
-# Get elements tree as provided by xmllint 'du' command 
+# Get elements tree as provided by xmllint 'du' xmllint shell command 
+# and get all namespaces as provided by 'ls //namespace::*' xmllint shell command
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
 	if [ -n "$xml_file" ]; then
 		(set_ns_prefix; echo "ls //namespace::*"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
 	else
-		echo "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file" > /dev/stderr
+		log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
 		exit 1
 	fi
 }
 
 #---------------------------------------------------------------------------------------
-# Print all xpaths
+# Add namespace prefix to xpath elements
 #---------------------------------------------------------------------------------------
 function add_namespace_prefix(){
 	while read -r line; do
 		if [ -n "$ns_prefix" ]; then
 			# xpath expression with no prefix
-			if ! grep -q ':' <<<"$line" ;then
+			#if ! grep -q ':' <<<"$line" ;then
+			if [ "$line" = "${line%:*}" ] ;then
 				sed -Ee "s/([/][/]?)([^/@]+)/\1${ns_prefix}:\2/g" <<<"$line"
 			else
 				idxx=2
-				if grep -q '^[/][/]' <<<"$line"; then
+				#if grep -q '^[/][/]' <<<"$line"; then
+				if [ '//' = "${line:0:2}" ]; then
 					idxx=3
 				fi
 				echo "$line" | gawk -v pr="${ns_prefix}" -v idx="$idxx" 'BEGIN{FS="[/]"; OFS="/"}{for(i=idx; i<=NF; i++) {if($i !~ /[@:]/){ $i = pr ":" $i}}} END { print $0 }'
@@ -186,6 +172,7 @@ function add_namespace_prefix(){
 # Set namespaces
 #---------------------------------------------------------------------------------------
 function set_ns_prefix(){
+    # set namespaces present on root element
 	if [ -n "$ns_prefix" ];then
 		echo "setrootns"
 		if [ -n "$defns" ] ;then
@@ -193,7 +180,25 @@ function set_ns_prefix(){
 			echo "setns $defns"
 		fi
 	else
-		echo
+	    # set all found namespaces including default one
+		for ns in "${xml_ns_arr[@]}"; do
+			#echo ">>>>> setting ${ns%%=*} ${ns##*=}" > /dev/stderr
+			case "${ns%%=*}" in
+			default)
+				if [ -n "$defns" ] ;then
+					# override defaultns prefix, -o option
+					echo "setns defaultns="
+					echo "setns $defns"
+				else
+				    ns_prefix="defaultns"
+					echo "setns ${ns_prefix}=${ns##*=}"
+				fi
+				;;
+			*)
+				echo "setns $ns"
+				;;
+			esac
+		done
 	fi
 }
 
@@ -230,8 +235,7 @@ function print_unique_xpath(){
 # a
 #---------------------------------------------------------------------------------------
 function sort_unique_keep_order(){
-	fs='¬'
-	nl -s "$fs" -nln | tr -s -d '\011\r' ' ' | sort -t "$fs" -k2,2 | uniq --skip-fields=1 | sort -t "$fs" -n -k1,1 | cut -d '¬' -f2,3
+	nl -s "$fs" -nln | tr -s -d '\011\r' ' ' | sort -t "$fs" -k2,2 | uniq --skip-fields=1 | sort -t "$fs" -n -k1,1 | cut -d "$fs" -f2,3
 }
 
 #---------------------------------------------------------------------------------------
@@ -239,15 +243,15 @@ function sort_unique_keep_order(){
 #---------------------------------------------------------------------------------------
 function init_env(){
 	if [ -z "$xsd" ] && [ -z "$xml_file" ]; then
-		echo -e "FATAL: At least one of -d, -l or -x must be provided.\n" > /dev/stderr
+		log_error "FATAL: At least one of -d, -l or -x must be provided.\n"
 		print_usage
 		exit 1
 	elif [ -f "$xsd" ] && [ -f "$xml_file" ]; then
-		echo -e "WARNING: both -d and -x were provided, -d will be ignored.\n" > /dev/stderr
+		log_error "WARNING: both -d and -x were provided, -d will be ignored.\n"
 		xsd=''
 	fi
 	# Set xpath expression start according to -s option
-	if grep -q '^[/][/]' <<<"$du_path" || [ "$(echo "$du_path" | tr -s '/' ' ' | wc -w)" -gt 1 ] ; then
+	if [ '//' = "${du_path:0:2}" ] || [ "$(echo "$du_path" | tr -s '/' ' ' | wc -w)" -gt 1 ] ; then
 		xprefix="$du_path"
 	else
 		xprefix='/'
@@ -260,7 +264,7 @@ function clean_tmp_files(){
 	fi
 }
 
-while getopts ad:D:f:ghl:no:p:rs:tx: arg
+while getopts ad:D:f:ghl:no:p:rs:tx:v arg
 do
   case $arg in
     a) abs_path=1;;
@@ -272,7 +276,9 @@ do
        keep_xml=1
        ;;
 	f) tag1=$OPTARG;;
-	g) dbg_cmd=(sed -En '/whereis/ s/^.*/\n&/p; /whereis|^[/] *> *$/! s/^.*/&/p');;
+	g) dbg_cmd=(sed -En '/whereis/ s/^.*/\n&/p; /whereis|^[/] *> *$/! s/^.*/&/p')
+		abs_path=1
+		;;
 	n|p) [ -n "$OPTARG" ] && ns_prefix=$OPTARG
 		 [ -z "$OPTARG" ] && ns_prefix="defaultns"
         ;;
@@ -287,6 +293,7 @@ do
 		set_html_opts
         ;;
 	x) xml_file=$OPTARG;;
+	v) echo -e "xml2xpath.sh 0.9.1 \nAuthor: Luis Muñoz"; exit;;
     *) 
        echo "Invalid option $arg"
        print_help
@@ -301,38 +308,35 @@ fi
 
 # Get XML namespaces and structure with xmllint
 # 'dir xxxxxxxxx' kinda NoOp that provides a record separator for awk
-IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk 'BEGIN{ RS="dir xxxxxxxxx\n" }{ print $0 "¬" }'  && printf '\0' )
+IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" 'BEGIN{ RS="dir xxxxxxxxx\n" }{ print $0 fs }'  && printf '\0' )
 
+# Put all found namespaces in array as <prefix>=<uri>
+IFS=$'\n' read -r -d '' -a xml_ns_arr < <(printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort | uniq)
 echo -e "Namespaces:\n"
-printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/  \1 \2/p' | sort | uniq
+printf "%s\n" "${xml_ns_arr[@]}"
 echo
 
-xml_tree=$(grep -v '^\/' <<<"${xml_info[1]}")
-if [ -n "$xml_tree" ];then 
-	if [ "$print_tree" -eq 1 ]; then
-		echo -e "XML tree:\n$xml_tree\n"
-	fi
+xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[1]}")
+if [ -n "$xml_tree" ];then
 	
-	indent_levels=$(get_indent_level "$xml_tree")
-	max_level=$(echo "$indent_levels" | tail -n1)
-	
+	# Array with elements like <indent level>¬element, e.g. 3¬thead
+	IFS=$'\n' read -r -d '' -a xml_tree_ilvl < <(printf "%s\n" "$xml_tree" | gawk '{ $0=gensub(/( *)([^ ]+)/, "\\1¬\\2","g",$0); split($0, a, /¬/); print length(a[1])/2 "¬" a[2] }')
+	max_level=$(printf "%s\n" "${xml_tree_ilvl[@]}" | sort -nr -t '¬' | head -n1 | cut -d '¬' -f1)
 	declare -a xpath_arr # tmp array to hold tree partially
 	declare -a xpath_all # save all found xpath
 
     # ################################################
 	# generate xpaths from tree based on indentation
 	# ################################################
-	while [ -n "$xml_tree" ] && IFS='' read -r line; do
-	    indent=$(space2dots <<< "$line")
-	    # divide by 2 since xmllint uses 2 spaces to indent.
-	    # Only indentation level is needed, no the indentation itself.
-	    indent_lvl=$((${#indent}/2))
+	for line in "${xml_tree_ilvl[@]}"; do
+	    # Get indent level from beginning of array element, e.g. 4¬div
+	    indent_lvl="${line%¬*}"
 	    prev_lvl=$((indent_lvl - 1))
 	
 	    if [ "$indent_lvl" -eq 0 ] ; then
 	    	if [ "$du_path" == '/' ]; then
 		        #no indent level, xpath root
-		        xpath_arr[0]="$line"
+		        xpath_arr[0]="${line#*¬}"
 		        xpath="${xpath_arr[0]}"
 	    	elif [ "$du_path" != '/' ]; then
 		    	# an xpath expression has been provided with -s so first element is discarded
@@ -342,16 +346,20 @@ if [ -n "$xml_tree" ];then
 		    fi
 	    elif [ "$indent_lvl" -gt 0 ] && [ "$indent_lvl" -le "$max_level" ]; then
 	        # append element to previous by indentation level
-	        xpath="${xpath_arr[$prev_lvl]}/$(tr -d ' ' <<< "$line")"
+	        xpath="${xpath_arr[$prev_lvl]}/${line#*¬}"
 	        # store current xpath
 	        xpath_arr[$indent_lvl]="${xpath}"
 	    fi
 	
 		idx=${#xpath_all[@]}
 		xpath_all[$idx]="${xprefix}${xpath}"
-	done < <(printf '%s\n' "$xml_tree")
+	done
 	
-	
+	# -t option was passed, show tree as is.
+	if [ "$print_tree" -eq 1 ]; then
+		echo -e "XML tree:\n$xml_tree\n"
+	fi
+	# Print found xpath expressions to stdout
 	if [ "$abs_path" -eq 1 ];then
 		# Show absolute xpath expressions including attributes
 	    echo -e "\nFound Xpath (absolute):\n"
@@ -366,13 +374,13 @@ if [ -n "$xml_tree" ];then
 		    echo -e "Found XPath:\n"
 		    printf "%s\n" "${xpath_all[@]}" | sort_unique_keep_order
 		else
-			echo "ERROR: should have not happened but the code reached here :-(" >/dev/stderr
+			log_error "ERROR: should have not happened but the code reached here :-("
 			clean_tmp_files
 			exit 1
 		fi
 	fi
 else
-	echo "No xpath found" >/dev/stderr
+	log_error "No xpath found"
 	clean_tmp_files
 	exit 127
 fi
