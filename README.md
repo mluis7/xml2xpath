@@ -201,7 +201,7 @@ This start root element has a default namespace, i.e. without a prefix
 `<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">`
 
 Passing `-n` will map that namespace to a `defaultns` prefix by default.
-To change that, pass `-o` option with the desired definition in the form `<prefix>:<uri>`
+To change that, pass `-o` option with the desired definition in the form `<prefix>=<uri>`.
 
 `xml2xpath.sh -n -o 'ns1=http://www.w3.org/2005/Atom' -s '//ns1:entry[descendant::ns1:name[.="author2"]]' -x tests/resources/wiki.xml`
 
@@ -347,7 +347,7 @@ NAME
 
 SYNOPSIS
   xml2xpath.sh [-h] [COMMON OPTIONS] [XSD OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
-  xml2xpath.sh [-h] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -x <file>] [-l <file>]
+  xml2xpath.sh [-h] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
 
 DESCRIPTION
  Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file. 
@@ -362,7 +362,7 @@ OPTIONS
 
   XML/HTML Common Options
     -a   Show absolute Xpaths. Use -g too to add details. -s is used to filter but absolute paths are shown.
-    -g   Print xmllint command for debugging or clarity.
+    -g   Print xmllint command for debugging or clarity. Implies -a.
     -r   Print repeated xpaths when -a is used. For debugging only.
     -s   Start printing XPath at an absolute or relative xpath, e.g.: /shiporder/shipto ,//shipto
           Must contain namespace prefix if needed. Examples: //defaultns:entry, //xs:element
@@ -372,8 +372,8 @@ OPTIONS
      -l   Use HTML parser
 
   XML options
-     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns'.
-     -o   Add a namespace definition in the form <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
+     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
+     -o   Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
      -p   Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
      -x   xml file, will take precedence over -d option.
      
