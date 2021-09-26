@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-
-[ -z "$dbg" ] && dbg=0
+dbg=0
+[ -n "$dbg" ] && dbg=1
 
 #---------------------------------------------------------------------------------------
 # Verify test case result and return result and description

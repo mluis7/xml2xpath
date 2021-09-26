@@ -3,6 +3,7 @@
 # Example file
 # https://xp-dev.com/svn/playgrnd/XMLExamples/readme.html
 #
+script_name=$(basename "$0")
 
 source test-lib-src.sh
 xml_file="resources/test.html"
@@ -19,7 +20,7 @@ TC05="HTML absolute paths with duplicates (-a -r)"
 TC06="HTML relative paths (-s) containing axes expression axes::elem"
 # TODO: invalid html 
 
-echo "*** HTML tests ***"
+echo "*** HTML tests ($script_name) ***"
 test_run "TC01"
 test_result "$?"
 

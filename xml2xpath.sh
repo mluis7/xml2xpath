@@ -138,7 +138,9 @@ function set_html_opts(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
     if [ -n "$xml_file" ]; then
-        (set_root_ns ; echo "ls //namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        #(set_root_ns ; echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        #(set_root_ns ; echo -e "ls /*/namespace::*[count(./parent::*/namespace::*)]\nls $xprefix/namespace::*"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        (set_root_ns ; echo -e "ls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
         exit 1
@@ -163,54 +165,50 @@ function set_root_ns(){
 }
 
 #---------------------------------------------------------------------------------------
-# Set namespaces
+#  Generate elements for unique_ns_arr (unique namespaces), mapping default ones to distinct prefixes.
 #---------------------------------------------------------------------------------------
-function set_ns_prefix(){
-    # -n was no passed
-    if [ -z "$ns_prefix" ];then
-        isDfNsSet=0
-        # set all found namespaces including default one
-# FIXME: set all ns in unique_ns_arr
-        for ns in $(printf "%s\n" "${xml_ns_arr[@]}" | sort_unique_keep_order); do
-            case "${ns%%=*}" in
-            default)
-				if [ -n "$defns" ] ;then
-                    # override defaultns prefix, -o option
-                    echo "setns defaultns="
-                    echo "setns $defns"
-                else
-                    if [ "$isDfNsSet" -eq 1 ]; then
-#                        log_error "Warning: default namespace already set. $ns will not be set."
-#                        continue
-                         ns_prefix="dfns1"
-                     else
-                        ns_prefix="defaultns"
-                        isDfNsSet=1
-                    fi
-                    echo "setns ${ns_prefix}=${ns##*=}"
-                fi
-                log_error  ">>>>> setting default <${ns_prefix}|$defns>=${ns##*=}"
-                ;;
-            *)
-                log_error  ">>>>> setting ${ns%%=*}=${ns##*=}"
-                echo "setns ${ns%%=*}=${ns##*=}"
-                ;;
-            esac
-        done
-    else
-        set_root_ns
+function make_unique_ns_arr(){
+    local ni=0
+    local nsxx='nsxx'
+    if [ -n "${ns_prefix}" ];then
+        nsxx="${ns_prefix}"
     fi
+    sort_unique_keep_order | while IFS= read -r name_uri; do
+        case "${name_uri%%=*}" in
+            default)
+                # -o ; if uri matches, override ns
+                if [ "${defns##*=}" == "${name_uri##*=}" ]; then
+                    echo "${defns}"
+                else
+                    echo "${nsxx}${ni}=${name_uri##*=}"
+                fi
+                ((ni=ni+1))
+                ;;
+           *) echo "$name_uri" ;;
+       esac
+    done
+}
+
+#---------------------------------------------------------------------------------------
+# Find namespace prefix in array
+#---------------------------------------------------------------------------------------
+function get_ns_prefix(){
+    for nu in "${unique_ns_arr[@]}"; do
+         if [ "${nu#*=}" == "${1#*=}" ]; then
+            echo "${nu%=*}"
+            break
+         fi
+    done
 }
 
 #---------------------------------------------------------------------------------------
 # Print all xpaths
 #---------------------------------------------------------------------------------------
 function print_all_xpath(){
+    for nu in "${unique_ns_arr[@]}"; do
+        echo "setns $nu"
+    done
     for i in "${!xpath_all[@]}"; do
-        if [ "$i" -gt 0 ] && [ "${xml_ns_arr[$i]}" != "${xml_ns_arr[$i-1]}" ]; then
-# FIXME: lookup ns on unique_ns_arr
-            echo "setns ${xml_ns_arr[$i]}"
-        fi
         printf "whereis %s\nwhereis %s/@*\n" "${xpath_all[$i]}" "${xpath_all[$i]}"
     done | print_unique_xpath
 }
@@ -332,12 +330,11 @@ IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" 'BEGIN{ 
 
 # Put all found namespaces in array as <prefix>=<uri>
 IFS=$'\n' read -r -d '' -a xml_ns_arr < <(printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
+#printf ">>>>> %s\n" "${xml_info[0]}"
 echo -e "\nNamespaces:"
-# FIXME: make unique_ns_arr array ready for 'setns'
-unique_ns=$(printf "  %s\n" "${xml_ns_arr[@]}" | sort_unique_keep_order)
-is_dup_ns="$(cut -d'=' -f1 <<<"$unique_ns" | uniq -cd | tr -s ' ')"
-echo "$unique_ns"
-[ -n "$is_dup_ns" ] && echo -e "\nReused namespace prefixes: $is_dup_ns"
+# make unique_ns_arr array ready for 'setns'
+IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${xml_ns_arr[@]}" | make_unique_ns_arr)
+printf "%s\n" "${unique_ns_arr[@]}"
 
 xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[1]}")
 if [ -n "$xml_tree" ];then
@@ -358,15 +355,19 @@ if [ -n "$xml_tree" ];then
         prev_lvl=$((indent_lvl - 1))
         
         ns_pfx=''
-        if [ "$isHtml" -eq 0 ] && [ -n "$ns_prefix" ]; then
+        if [ "$isHtml" -eq 0 ] && [ "$abs_path" -eq 1 ]; then
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             if [ "$line" = "${line%:*}" ] ;then
+                #log_error ">>>> $line ${xml_ns_arr[$j]}"
                 if [ "$j" -gt 0 ] && [ "${xml_ns_arr[$j]}" != "${xml_ns_arr[$j-1]}" ]; then
-# FIXME: given namespace uri, lookup prefix on unique_ns_arr
-                    log_error ">>>>>> ${xml_ns_arr[$j]} != ${xml_ns_arr[$j-1]}"
-                    ns_prefix="defaultns1"
+                    ns_pfx="$(get_ns_prefix "${xml_ns_arr[$j]}"):"
+                else
+                    ns_pfx="$(get_ns_prefix "${xml_ns_arr[$j]}"):"
                 fi
-                ns_pfx="${ns_prefix}:"
+                # namespace prefix not found, try default (may be from -o option)
+                if [ -z "$ns_pfx" ] || [ "$ns_pfx" == ':' ]; then
+                    ns_pfx="${ns_prefix}:"
+                fi
             fi
             
         fi
@@ -406,7 +407,7 @@ if [ -n "$xml_tree" ];then
         if [ "$isHtml" -eq 1 ]; then
             print_all_xpath | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
         else
-            (set_ns_prefix ; print_all_xpath) | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
+            (set_root_ns; print_all_xpath) | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
         fi
     else
         # Show xpath expressions

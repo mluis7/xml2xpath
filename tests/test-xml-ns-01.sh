@@ -4,14 +4,14 @@
 # https://github.com/HL7/C-CDA-Examples/blob/master/General/Parent%20Document%20Replace%20Relationship/CCD%20Parent%20Document%20Replace%20(C-CDAR2.1).xml
 #
 # Namespaces on root element, default namespace: urn:hl7-org:v3
-
+script_name=$(basename "$0")
 source test-lib-src.sh
 xml_file="resources/HL7.xml"
 test_opts=()
 test_type_opts=(-x "$xml_file")
 rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'
 
-echo "*** XML tests - namespaces on root element ***"
+echo "*** XML tests - namespaces on root element ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
 TC02="Replace 'defaultns' prefix (-o), start at relative path (-s)"

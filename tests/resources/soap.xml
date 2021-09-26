@@ -1,6 +1,6 @@
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:soap1="http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx">
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://example.com/ns1">
 <soap:Body>
-    <incident xmlns="http://example.com">
+    <incident xmlns="http://example.com/ns2">
         <Company type="String">Test</Company>
     </incident>
 </soap:Body>
