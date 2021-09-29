@@ -26,6 +26,18 @@ function show_color(){
     done
 }
 
+function quote_opts(){
+    local str=''
+    for o in "$@"; do
+        if grep -q "^[-][a-z]" <<<"$o"; then
+            str+=" $o "
+        else
+            str+="\"$o\""
+        fi
+    done
+    echo "$str" | tr -s ' '
+}
+
 #---------------------------------------------------------------------------------------
 # Run test case
 #---------------------------------------------------------------------------------------
@@ -43,7 +55,10 @@ function show_errors(){
 function print_test_descr(){
     echo -e "\n$1   : ${!1}"
     if [ "$dbg" -eq 1 ]; then
-        echo "cmd    : ../xml2xpath.sh ${test_opts[*]} ${test_type_opts[*]}"
+        topts=$(quote_opts "${test_opts[@]}")
+            
+        #echo "cmd    : ../xml2xpath.sh ${test_opts[*]} ${test_type_opts[*]}"
+        echo "cmd    : ../xml2xpath.sh $topts ${test_type_opts[*]}"
     fi
 }
 

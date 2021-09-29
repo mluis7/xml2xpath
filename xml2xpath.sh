@@ -5,13 +5,19 @@
 # 
 
 script_name=$(basename "$0")
+version="0.9.2"
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
 #dbg_log="$HOME/tmp/a-sh-debug.log.$$"
 #PS4='+($?) $(date "+%s.%N")\011:$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
-
+function version(){
+    cat<<EOF-VER
+xml2xpath.sh $version
+Author: Luis Muñoz
+EOF-VER
+}
 #---------------------------------------------------------------------------------------
 # Help.
 #---------------------------------------------------------------------------------------
@@ -89,6 +95,7 @@ uniq_xp=1
 ns_prefix=''
 defns=''
 fs='¬'
+xuuid="x$(uuidgen --sha1 --namespace @url --name "$(hostname)/$script_name")"
 
 # commands as array
 lint_cmd=(xmllint --shell)
@@ -138,15 +145,22 @@ function set_html_opts(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
     if [ -n "$xml_file" ]; then
-        #(set_root_ns ; echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        (set_root_ns ; echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir $xuuid" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
         #(set_root_ns ; echo -e "ls /*/namespace::*[count(./parent::*/namespace::*)]\nls $xprefix/namespace::*"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
-        (set_root_ns ; echo -e "ls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        
+# FIXME: stable with missing ns if -s is passed because adding xprefix breaks the ns prefix table lookup
+        #(set_root_ns ; echo -e "ls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        
+        #(set_root_ns ; echo -e "ls //namespace::*[count(./parent::*/namespace::*)]"; echo "dir $xuuid" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
         exit 1
     fi
 }
 
+#---------------------------------------------------------------------------------------
+# Return tree elements in the form <indent level>¬element, e.g. 3¬thead
+#---------------------------------------------------------------------------------------
 function get_xml_tree_ilvl(){
     printf "%s\n" "$1" | gawk '{ $0=gensub(/( *)([^ ]+)/, "\\1¬\\2","g",$0); split($0, a, /¬/); print length(a[1])/2 "¬" a[2] }'
 }
@@ -158,7 +172,7 @@ function set_root_ns(){
     if [ -n "$ns_prefix" ];then
         echo "setrootns"
         if [ -n "$defns" ] ;then
-            echo "setns defaultns="
+            #echo "setns defaultns="
             echo "setns $defns"
         fi
     fi
@@ -179,8 +193,10 @@ function make_unique_ns_arr(){
                 # -o ; if uri matches, override ns
                 if [ "${defns##*=}" == "${name_uri##*=}" ]; then
                     echo "${defns}"
-                else
+                elif [ "$ni" -gt 0 ]; then
                     echo "${nsxx}${ni}=${name_uri##*=}"
+                else
+                    echo "${nsxx}=${name_uri##*=}"
                 fi
                 ((ni=ni+1))
                 ;;
@@ -190,12 +206,28 @@ function make_unique_ns_arr(){
 }
 
 #---------------------------------------------------------------------------------------
-# Find namespace prefix in array
+# Find namespace prefix by uri in array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
-function get_ns_prefix(){
+function get_ns_prefix_by_uri(){
     for nu in "${unique_ns_arr[@]}"; do
+        # Compare uri
          if [ "${nu#*=}" == "${1#*=}" ]; then
+            # return prefix
             echo "${nu%=*}"
+            break
+         fi
+    done
+}
+
+#---------------------------------------------------------------------------------------
+# Find first default namespace prefix in array
+#---------------------------------------------------------------------------------------
+function get_default_ns_prefix(){
+    for nu in "${unique_ns_arr[@]}"; do
+        # Compare uri
+         if [ "${nu%=*}" == "defaultns" ]; then
+            # return renamed prefix
+            get_ns_prefix_by_uri "${nu}"
             break
          fi
     done
@@ -325,8 +357,8 @@ echo -e "\nxml2xpath: find XPath expressions on $xml_file"
 printf "   %s\n" "${all_opts[@]}" 
 
 # Get XML namespaces and structure with xmllint
-# 'dir xxxxxxxxx' kinda NoOp that provides a record separator for awk
-IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" 'BEGIN{ RS="dir xxxxxxxxx\n" }{ print $0 fs }'  && printf '\0' )
+# 'dir $xuuid' kinda NoOp that provides a record separator for awk
+IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" -v ers="dir $xuuid\n" 'BEGIN{ RS=ers }{ print $0 fs }'  && printf '\0' )
 
 # Put all found namespaces in array as <prefix>=<uri>
 IFS=$'\n' read -r -d '' -a xml_ns_arr < <(printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
@@ -355,15 +387,15 @@ if [ -n "$xml_tree" ];then
         prev_lvl=$((indent_lvl - 1))
         
         ns_pfx=''
-        if [ "$isHtml" -eq 0 ] && [ "$abs_path" -eq 1 ]; then
+        if [ "$isHtml" -eq 0 ] ; then #&& [ "$abs_path" -eq 1 ]
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
+            # Element might still belong to a default namespace
             if [ "$line" = "${line%:*}" ] ;then
-                #log_error ">>>> $line ${xml_ns_arr[$j]}"
-                if [ "$j" -gt 0 ] && [ "${xml_ns_arr[$j]}" != "${xml_ns_arr[$j-1]}" ]; then
-                    ns_pfx="$(get_ns_prefix "${xml_ns_arr[$j]}"):"
-                else
-                    ns_pfx="$(get_ns_prefix "${xml_ns_arr[$j]}"):"
-                fi
+#                if [ "$j" -gt 0 ] && [ "${xml_ns_arr[$j]}" != "${xml_ns_arr[$j-1]}" ]; then
+#                    ns_pfx="$(get_ns_prefix_by_uri "${xml_ns_arr[$j]}"):"
+#                else
+                    ns_pfx="$(get_default_ns_prefix):"
+#                fi
                 # namespace prefix not found, try default (may be from -o option)
                 if [ -z "$ns_pfx" ] || [ "$ns_pfx" == ':' ]; then
                     ns_pfx="${ns_prefix}:"
