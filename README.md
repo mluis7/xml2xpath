@@ -26,20 +26,20 @@ Get all element xpaths from an XML file. To show attribute XPaths also, add `-a`
 
 Result:
 
-	Namespaces:
-	
-	  default http://example.com
-	  soap1 http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx
-	  soap http://schemas.xmlsoap.org/soap/envelope/
-	  xml http://www.w3.org/XML/1998/namespace
-	
-	Found XPath:
-	
-	/
-	/soap:Envelope
-	/soap:Envelope/soap:Body
-	/soap:Envelope/soap:Body/incident
-	/soap:Envelope/soap:Body/incident/Company
+    xml2xpath: find XPath expressions on soap.xml
+       -x ; XML file: soap.xml
+    
+    Namespaces:
+    soap1=http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx
+    soap=http://schemas.xmlsoap.org/soap/envelope/
+    defaultns=http://example.com
+    
+    Found 4 XPath expressions (unique, use -r to override):
+    
+    /soap:Envelope
+    /soap:Envelope/soap:Body
+    /soap:Envelope/soap:Body/defaultns:incident
+    /soap:Envelope/soap:Body/defaultns:incident/defaultns:Company
 
 ## Using found XPaths
 Found relative or absolute XPaths expressions can be tested on browser development tools.
@@ -217,20 +217,18 @@ Passing `-s` option to show xpath expressions starting at an specific element or
 
 Result:
 
-	Namespaces:
-	
-	  default http://www.w3.org/2005/Atom
-	  xml http://www.w3.org/XML/1998/namespace
-	
-	Found XPath:
-	
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author/name
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author/name
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author/name
+    xml2xpath: find XPath expressions on wiki.xml
+       -n ; default ns prefix: defaultns
+       -s ; Start tree at: '//defaultns:entry/defaultns:author' (du_path)
+       -x ; XML file: wiki.xml
+    
+    Namespaces:
+    defaultns=http://www.w3.org/2005/Atom
+    
+    Found 6 XPath expressions (unique, use -r to override):
+    
+    //defaultns:entry/defaultns:author
+    //defaultns:entry/defaultns:author/defaultns:name
 
 ## TL;DR
 
