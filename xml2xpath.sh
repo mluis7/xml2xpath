@@ -145,13 +145,10 @@ function set_html_opts(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
     if [ -n "$xml_file" ]; then
-        (set_root_ns ; echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir $xuuid" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
-        #(set_root_ns ; echo -e "ls /*/namespace::*[count(./parent::*/namespace::*)]\nls $xprefix/namespace::*"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
-        
-# FIXME: stable with missing ns if -s is passed because adding xprefix breaks the ns prefix table lookup
-        #(set_root_ns ; echo -e "ls $xprefix/namespace::*[count(./parent::*/namespace::*)]"; echo "dir xxxxxxxxx" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
-        
-        #(set_root_ns ; echo -e "ls //namespace::*[count(./parent::*/namespace::*)]"; echo "dir $xuuid" ; echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        (set_root_ns 
+        echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"
+        echo "dir $xuuid"
+        echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
         exit 1
@@ -337,7 +334,7 @@ do
     x) xml_file=$OPTARG
         all_opts[${#all_opts[@]}]="-x ; XML file: $xml_file"
         ;;
-    v) echo -e "xml2xpath.sh 0.9.1 \nAuthor: Luis Muñoz"; exit;;
+    v) echo -e "xml2xpath.sh $version \nAuthor: Luis Muñoz"; exit;;
     *) 
        echo "Invalid option $arg"
        print_help
@@ -391,11 +388,8 @@ if [ -n "$xml_tree" ];then
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
             if [ "$line" = "${line%:*}" ] ;then
-#                if [ "$j" -gt 0 ] && [ "${xml_ns_arr[$j]}" != "${xml_ns_arr[$j-1]}" ]; then
-#                    ns_pfx="$(get_ns_prefix_by_uri "${xml_ns_arr[$j]}"):"
-#                else
-                    ns_pfx="$(get_default_ns_prefix):"
-#                fi
+                ns_pfx="$(get_default_ns_prefix):"
+
                 # namespace prefix not found, try default (may be from -o option)
                 if [ -z "$ns_pfx" ] || [ "$ns_pfx" == ':' ]; then
                     ns_pfx="${ns_prefix}:"

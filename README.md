@@ -17,6 +17,7 @@ Table of contents
 * [TL;DR](#tldr)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Script help](#help)
+* [Known issues](#known-issues)
 
 ## Basic usage
 Get all element xpaths from an XML file. To show attribute XPaths also, add `-a` (absolute XPaths)
@@ -406,3 +407,5 @@ SEE ALSO
        Full documentation at: https://github.com/mluis7/xml2xpath
 ```
         
+## Known issues
+* Multiple default namespaces in document: `-o` and/or `-s` may give [incorrect results](https://stackoverflow.com/questions/69380381/send-command-output-back-to-previous-subshell-in-pipe-for-processing).
