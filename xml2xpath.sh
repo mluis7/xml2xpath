@@ -180,7 +180,7 @@ function set_root_ns(){
 #---------------------------------------------------------------------------------------
 function make_unique_ns_arr(){
     local ni=0
-    local nsxx='nsxx'
+    local nsxx='defaultns'
     if [ -n "${ns_prefix}" ];then
         nsxx="${ns_prefix}"
     fi
@@ -428,7 +428,7 @@ if [ -n "$xml_tree" ];then
     if [ "$abs_path" -eq 1 ];then
         
         # Show absolute xpath expressions including attributes
-        printf "\nFound %d XPath expressions (absolute):\n\n" "${#xpath_all[@]}"
+        printf "\nFound %d XPath expressions (absolute, unique, use -r to override):\n\n" "${#xpath_all[@]}"
         
         if [ "$isHtml" -eq 1 ]; then
             print_all_xpath | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
@@ -438,7 +438,7 @@ if [ -n "$xml_tree" ];then
     else
         # Show xpath expressions
         if [ "${#xpath_all[@]}" -gt 0 ];then
-            printf "\nFound %d XPath expressions:\n\n" "${#xpath_all[@]}"
+            printf "\nFound %d XPath expressions (unique, use -r to override):\n\n" "${#xpath_all[@]}"
             printf "%s\n" "${xpath_all[@]}" | sort_unique_keep_order
         else
             log_error "ERROR: should have not happened but the code reached here :-("

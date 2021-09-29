@@ -26,20 +26,20 @@ Get all element xpaths from an XML file. To show attribute XPaths also, add `-a`
 
 Result:
 
-	Namespaces:
-	
-	  default http://example.com
-	  soap1 http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx
-	  soap http://schemas.xmlsoap.org/soap/envelope/
-	  xml http://www.w3.org/XML/1998/namespace
-	
-	Found XPath:
-	
-	/
-	/soap:Envelope
-	/soap:Envelope/soap:Body
-	/soap:Envelope/soap:Body/incident
-	/soap:Envelope/soap:Body/incident/Company
+    xml2xpath: find XPath expressions on soap.xml
+       -x ; XML file: soap.xml
+    
+    Namespaces:
+    soap1=http://schemas.xmlsoap.org/soap/envelope/xxxxxxxxx
+    soap=http://schemas.xmlsoap.org/soap/envelope/
+    defaultns=http://example.com
+    
+    Found 4 XPath expressions (unique, use -r to override):
+    
+    /soap:Envelope
+    /soap:Envelope/soap:Body
+    /soap:Envelope/soap:Body/defaultns:incident
+    /soap:Envelope/soap:Body/defaultns:incident/defaultns:Company
 
 ## Using found XPaths
 Found relative or absolute XPaths expressions can be tested on browser development tools.
@@ -217,20 +217,18 @@ Passing `-s` option to show xpath expressions starting at an specific element or
 
 Result:
 
-	Namespaces:
-	
-	  default http://www.w3.org/2005/Atom
-	  xml http://www.w3.org/XML/1998/namespace
-	
-	Found XPath:
-	
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author/name
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author/name
-	//defaultns:entry/defaultns:author
-	//defaultns:entry/defaultns:author/name
+    xml2xpath: find XPath expressions on wiki.xml
+       -n ; default ns prefix: defaultns
+       -s ; Start tree at: '//defaultns:entry/defaultns:author' (du_path)
+       -x ; XML file: wiki.xml
+    
+    Namespaces:
+    defaultns=http://www.w3.org/2005/Atom
+    
+    Found 6 XPath expressions (unique, use -r to override):
+    
+    //defaultns:entry/defaultns:author
+    //defaultns:entry/defaultns:author/defaultns:name
 
 ## TL;DR
 
@@ -343,68 +341,56 @@ If -t option is passed it will print XML elements tree also
 ## Help
 
 ```text
-NAME
-  xml2xpath.sh - Print XPath present on xml or (if possible) xsd files.
+Print XPath present on xml or (if possible) xsd files. Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file.
 
-SYNOPSIS
-  xml2xpath.sh [-h] [COMMON OPTIONS] [XSD OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
-  xml2xpath.sh [-h] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
+Usage: xml2xpath.sh [-h] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
+       xml2xpath.sh [-h] [COMMON OPTIONS] [XSD OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
 
-DESCRIPTION
- Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file. 
 
-OPTIONS
-  Basic options
-     -h   print this help message.
-  XSD options
-     -d   xsd file path.
-     -D   Same as -d but saves created xml instance to <xsd file path>.xml
-     -f   name of the root element to build xml from xsd.
+Options:
 
-  XML/HTML Common Options
-    -a   Show absolute Xpaths. Use -g too to add details. -s is used to filter but absolute paths are shown.
-    -g   Print xmllint command for debugging or clarity. Implies -a.
-    -r   Print repeated xpaths when -a is used. For debugging only.
-    -s   Start printing XPath at an absolute or relative xpath, e.g.: /shiporder/shipto ,//shipto
-          Must contain namespace prefix if needed. Examples: //defaultns:entry, //xs:element
-    -t   print XML element tree as provided by xmllint 'du' shell command.
-          
-  HTML options
-     -l   Use HTML parser
+Basic:
+  -h    print this help message.
+  -v    print version
 
-  XML options
-     -n   Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
-     -o   Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
-     -p   Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
-     -x   xml file, will take precedence over -d option.
-     
-EXAMPLES
-        # print all xpaths and elements tree
-        xml2xpath.sh -t -x test.xml
+XML/HTML Common Options:
+  -a    Show absolute Xpaths. Use -g too to add details. -s is used to filter but absolute paths are shown.
+  -g    Print xmllint command for debugging or clarity. Implies -a.
+  -r    Print repeated xpaths when -a is used. For debugging only.
+  -s    Start printing XPath at an absolute or relative xpath, e.g.: /shiporder/shipto, //shipto.
+          Must contain namespace prefix if needed. e.g.: //defaultns:entry, //xs:element
+  -t    print XML element tree as provided by xmllint 'du' shell command.      
 
-        # print xpaths starting at //shipto element
-        xml2xpath.sh -s '//shipto' -x test.xml
+HTML options:
+  -l    Use HTML parser
 
-        # print xpaths from generated xml
-        xml2xpath.sh -d test.xsd -f shiporder
+XML options:
+  -n    Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
+  -o    Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
+  -p    Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
+  -x    xml file, will take precedence over -d option.
 
-        # Use namespaces, show absolute paths and xmllint shell messages
-        xml2xpath.sh -a -n -g -x wiki.xml
+XSD options:
+  -d    xsd file path.
+  -D    Same as -d but saves created xml instance to <xsd file path>.xml
+  -f    name of the root element to build xml from xsd.
+  
+Examples:
 
-        # Add a namespace definition and use it in a relative expression
-        xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+  Print all xpaths and elements tree                                xml2xpath.sh -t -x test.xml
 
-        # Html file with absolute paths option
-        xml2xpath.sh -a -n -l test.html
+  Print xpaths starting at //shipto element                         xml2xpath.sh -s '//shipto' -x test.xml
+    
+  Print xpaths from generated xml                                   xml2xpath.sh -a -f shiporder -d tests/resources/shiporder.xsd 
 
-REPORTING BUGS
-        at: https://github.com/mluis7/xml2xpath
+  Use namespaces, show absolute paths and xmllint shell messages    xml2xpath.sh -a -n -g -x wiki.xml
+    
+  Add a namespace definition and use it in a relative expression    xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+    
+  Html file with absolute paths option                              xml2xpath.sh -a -n -l test.html
 
-AUTHOR
-       Written by Luis Muñoz
-
-SEE ALSO
-       Full documentation at: https://github.com/mluis7/xml2xpath
+Reporting bugs:
+  https://github.com/mluis7/xml2xpath/issues
 ```
         
 ## Known issues
