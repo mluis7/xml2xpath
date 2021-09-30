@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.9.2"
+version="0.10.0"
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
@@ -18,6 +18,7 @@ xml2xpath.sh $version
 Author: Luis Muñoz
 EOF-VER
 }
+
 #---------------------------------------------------------------------------------------
 # Help.
 #---------------------------------------------------------------------------------------
@@ -139,16 +140,46 @@ function set_html_opts(){
     lint_cmd[${#lint_cmd[@]}]="--html"
 }
 
+function parse_line(){
+    while read -r -u 3 xline; do 
+        printf "%s\n" "$xline"
+        if [ "$xline" == "/ > dir $xuuid" ]; then
+            break 
+        fi 
+    done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¬\1/;ta }' -e 's/^([0-9]{1,5}) *ELEMENT *([^ ]*)/\1¬\2/' -e 's/(default)? ?namespace( [a-z0-9]+)? ?href=([^=]+)/\1\2=\3/g' -e '/^[1-9]/ P;D'  
+}
+
+function send_cmd(){
+    echo "$1" >&4
+}
+
+function print_response(){
+    local limit=0
+    while IFS=$'\n' read -r -u 3 xline; do
+        #read -r -u 3 xline
+         printf "%s\n" "$xline"
+        ((limit=limit+1))
+        if [ "$xline" == "/ > bye" ] || [ -z "$1" ] || [ "$limit" -eq "$1" ]; then
+            break 
+        fi 
+    done
+}
+
 #---------------------------------------------------------------------------------------
 # Get elements tree as provided by xmllint 'du' xmllint shell command 
 # and get all namespaces as provided by 'ls //namespace::*' xmllint shell command
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
     if [ -n "$xml_file" ]; then
-        (set_root_ns 
-        echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"
-        echo "dir $xuuid"
-        echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+# FIXME: kill bg process
+        "${lint_cmd[@]}" "$xml_file" 1>&3 <&4 &
+        set_root_ns 
+        send_cmd "ls /*/namespace::*[local-name()!='xml']"
+        send_cmd "ls $xprefix/namespace::*[count(./parent::*/namespace::*)]"
+        send_cmd "dir $xuuid"
+        send_cmd "du $du_path"
+        send_cmd "bye"
+        print_response 100000
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
         exit 1
@@ -167,10 +198,10 @@ function get_xml_tree_ilvl(){
 #---------------------------------------------------------------------------------------
 function set_root_ns(){
     if [ -n "$ns_prefix" ];then
-        echo "setrootns"
+        send_cmd "setrootns"
         if [ -n "$defns" ] ;then
             #echo "setns defaultns="
-            echo "setns $defns"
+            send_cmd "setns $defns"
         fi
     fi
 }
@@ -342,6 +373,17 @@ do
   esac
 done
 
+fname='xff'
+fout='xffout'
+trap "rm -f $fname $fout" EXIT
+
+[ ! -p "$fname" ] && mkfifo "$fname"
+[ ! -p "$fout" ] && mkfifo "$fout"
+stop='dir xxxxxxx'
+
+exec 3<>"$fname"
+exec 4<>"$fout"
+
 init_env
 if [ -n "$xsd" ]; then
     create_xml_instance
@@ -451,5 +493,9 @@ else
     clean_tmp_files
     exit 127
 fi
+exec 3>&-
+exec 4>&-
+rm xff
+rm $fout
 echo
     
