@@ -10,7 +10,7 @@ version="0.10.0"
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
 #dbg_log="$HOME/tmp/a-sh-debug.log.$$"
-#PS4='+($?) $(date "+%s.%N")\011:$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
+#PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
 function version(){
     cat<<EOF-VER
@@ -103,11 +103,26 @@ lint_cmd=(xmllint --shell)
 dbg_cmd=(grep -v '\/ >')
 declare -a all_opts
 
+trap_with_arg() { # from https://stackoverflow.com/a/2183063/804678
+  local func="$1"; shift
+  for sig in "$@"; do
+    trap "$func $sig" "$sig"
+  done
+}
+
+stop() {
+  trap - SIGINT EXIT
+  printf '\n%s\n' "received $1, killing child processes"
+  rm -f "$fifo_in" "$fifo_out";
+  pkill -f xmllint
+  #kill -s SIGINT 0
+}
+
 #---------------------------------------------------------------------------------------
 # print to stderr
 #---------------------------------------------------------------------------------------
 function log_error(){
-    echo -e "$@" > /dev/stderr
+    echo -e "$@" >> /dev/stderr
 }
 
 #---------------------------------------------------------------------------------------
@@ -140,26 +155,35 @@ function set_html_opts(){
     lint_cmd[${#lint_cmd[@]}]="--html"
 }
 
-function parse_line(){
+function parse_ns_from_xpath(){
     while read -r -u 3 xline; do 
         printf "%s\n" "$xline"
         if [ "$xline" == "/ > dir $xuuid" ]; then
             break 
         fi 
-    done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¬\1/;ta }' -e 's/^([0-9]{1,5}) *ELEMENT *([^ ]*)/\1¬\2/' -e 's/(default)? ?namespace( [a-z0-9]+)? ?href=([^=]+)/\1\2=\3/g' -e '/^[1-9]/ P;D'  
+    done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¦\1/;ta }' \
+                  -e 's/^([0-9]{1,5}) *ELEMENT *([^ ]*)/\1¦\2/' \
+                  -e 's/(default)? ?namespace ([a-z0-9]+)? ?href=([^=]+)¦?/\1\2=\3/g' \
+                  -e '/^[1-9]/ P;D'  
 }
 
 function send_cmd(){
-    echo "$1" >&4
+    echo -e "$1" >&4
+}
+
+function stop_reading(){ 
+    [[ "$3" == "/ > bye" ]] || [[ -z "$1" || "$1" -eq "$2" ]]
 }
 
 function print_response(){
     local limit=0
+    local how_many=1
+    [ -n "$1" ] && how_many="$1"
+    
     while IFS=$'\n' read -r -u 3 xline; do
-        #read -r -u 3 xline
          printf "%s\n" "$xline"
         ((limit=limit+1))
-        if [ "$xline" == "/ > bye" ] || [ -z "$1" ] || [ "$limit" -eq "$1" ]; then
+        if [ "$xline" == "/ > dir $xuuid" ] || stop_reading "$how_many" "$limit" "$xline" ; then
             break 
         fi 
     done
@@ -171,15 +195,31 @@ function print_response(){
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
     if [ -n "$xml_file" ]; then
-# FIXME: kill bg process
         "${lint_cmd[@]}" "$xml_file" 1>&3 <&4 &
-        set_root_ns 
+        
+        # send commands to xmllint shell
+        set_root_ns >&4
+
+        if [ $isHtml -eq 0 ]; then
+            send_cmd "xpath //*"
+            send_cmd "dir $xuuid"
+            parse_ns_from_xpath
+            send_cmd "dir $xuuid"
+            print_response 100000
+        else
+            send_cmd "\ndir $xuuid"
+            print_response 2
+        fi
+       
         send_cmd "ls /*/namespace::*[local-name()!='xml']"
-        send_cmd "ls $xprefix/namespace::*[count(./parent::*/namespace::*)]"
+        send_cmd "ls /*//*/namespace::*[count(./parent::*/namespace::*)]"
         send_cmd "dir $xuuid"
-        send_cmd "du $du_path"
-        send_cmd "bye"
         print_response 100000
+        
+        send_cmd "du $du_path"
+        send_cmd "dir $xuuid"
+        print_response 100000
+        send_cmd "bye"
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
         exit 1
@@ -198,10 +238,10 @@ function get_xml_tree_ilvl(){
 #---------------------------------------------------------------------------------------
 function set_root_ns(){
     if [ -n "$ns_prefix" ];then
-        send_cmd "setrootns"
+        echo "setrootns"
         if [ -n "$defns" ] ;then
             #echo "setns defaultns="
-            send_cmd "setns $defns"
+            echo "setns $defns"
         fi
     fi
 }
@@ -233,15 +273,33 @@ function make_unique_ns_arr(){
     done
 }
 
+function get_ns_by_short_uri(){
+    for nu in "${root_ns_arr[@]}"; do
+        local query="${1}"
+        local uri="${nu#*=}"
+         if [ "${uri:0:40}" == "${query:0:40}" ];then
+            echo "${nu}"
+            break
+         fi
+    done
+}
+
 #---------------------------------------------------------------------------------------
 # Find namespace prefix by uri in array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
 function get_ns_prefix_by_uri(){
     for nu in "${unique_ns_arr[@]}"; do
+        local query="${1#*=}"
+        local uri="${nu#*=}"
+        local prefix="${nu%=*}"
         # Compare uri
-         if [ "${nu#*=}" == "${1#*=}" ]; then
+         if [ "${uri}" == "${query}" ]; then
             # return prefix
-            echo "${nu%=*}"
+            echo "${prefix}"
+            break
+         elif [[ "${query}" =~ \.\.\.$ ]] && [ "${uri:0:40}" == "${query:0:40}" ];then
+            # should not be needed
+            echo "${prefix}"
             break
          fi
     done
@@ -265,8 +323,13 @@ function get_default_ns_prefix(){
 # Print all xpaths
 #---------------------------------------------------------------------------------------
 function print_all_xpath(){
+    # set all root namespaces
+    for nu in "${root_ns_arr[@]}"; do
+        [ -n "$nu" ] && echo "setns $nu"
+    done
+    # set other namespaces found
     for nu in "${unique_ns_arr[@]}"; do
-        echo "setns $nu"
+        [ -n "$nu" ] && echo "setns $nu"
     done
     for i in "${!xpath_all[@]}"; do
         printf "whereis %s\nwhereis %s/@*\n" "${xpath_all[$i]}" "${xpath_all[$i]}"
@@ -299,11 +362,12 @@ function sort_unique_keep_order(){
 # Check initial conditions
 #---------------------------------------------------------------------------------------
 function init_env(){
-    if [ -z "$xsd" ] && [ -z "$xml_file" ]; then
-        log_error "FATAL: At least one of -d, -l or -x must be provided.\n"
+    if [[ -z "$xml_file"  || !  -f "$xml_file" ]] && [[ -z "$xsd"  || ! -f "$xsd" ]]; then
+        log_error "FATAL: At least one of -d, -l or -x must be provided and be an existing file.\n"
         print_usage
         exit 1
-    elif [ -f "$xsd" ] && [ -f "$xml_file" ]; then
+    fi
+    if [ -f "$xsd" ] && [ -f "$xml_file" ]; then
         log_error "WARNING: both -d and -x were provided, -d will be ignored.\n"
         xsd=''
     fi
@@ -313,6 +377,16 @@ function init_env(){
     else
         xprefix='/'
     fi
+
+    fifo_in='xffin'
+    fifo_out='xffout'
+    trap_with_arg 'stop' EXIT SIGINT SIGTERM SIGHUP
+    
+    [ ! -p "$fifo_in" ] && mkfifo "$fifo_in"
+    [ ! -p "$fifo_out" ] && mkfifo "$fifo_out"
+    
+    exec 3<>"$fifo_in"
+    exec 4<>"$fifo_out"
 }
 
 function clean_tmp_files(){
@@ -338,7 +412,7 @@ do
     f) tag1=$OPTARG
        all_opts[${#all_opts[@]}]="-f ; tag1=$tag1"
         ;;
-    g) dbg_cmd=(sed -En '/whereis/ s/^.*/\n&/p; /whereis|^[/] *> *$/! s/^.*/&/p')
+    g) dbg_cmd=(sed -En '/whereis/ s/^[/] > whereis (.*)/\nSearch: \1/p; /whereis|^([/] >)? *$/! s/^[/][^ ].*/&/p')
         abs_path=1
         all_opts[${#all_opts[@]}]="-g ; abs_path=$abs_path ; debug command: '$dbg_cmd'"
         ;;
@@ -373,17 +447,6 @@ do
   esac
 done
 
-fname='xff'
-fout='xffout'
-trap "rm -f $fname $fout" EXIT
-
-[ ! -p "$fname" ] && mkfifo "$fname"
-[ ! -p "$fout" ] && mkfifo "$fout"
-stop='dir xxxxxxx'
-
-exec 3<>"$fname"
-exec 4<>"$fout"
-
 init_env
 if [ -n "$xsd" ]; then
     create_xml_instance
@@ -395,19 +458,47 @@ fi
 echo -e "\nxml2xpath: find XPath expressions on $xml_file"
 printf "   %s\n" "${all_opts[@]}" 
 
-# Get XML namespaces and structure with xmllint
+# Get XML namespaces and doc tree with xmllint
 # 'dir $xuuid' kinda NoOp that provides a record separator for awk
 IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" -v ers="dir $xuuid\n" 'BEGIN{ RS=ers }{ print $0 fs }'  && printf '\0' )
 
 # Put all found namespaces in array as <prefix>=<uri>
-IFS=$'\n' read -r -d '' -a xml_ns_arr < <(printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
-#printf ">>>>> %s\n" "${xml_info[0]}"
-echo -e "\nNamespaces:"
-# make unique_ns_arr array ready for 'setns'
-IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${xml_ns_arr[@]}" | make_unique_ns_arr)
-printf "%s\n" "${unique_ns_arr[@]}"
+IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort_unique_keep_order)
 
-xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[1]}")
+declare -a arrns
+#arrns+=( "${root_ns_arr[@]}" )
+arrns[0]="${root_ns_arr[0]}"
+while IFS=$'\n' read -r line;do
+
+    elem=( $(tr '¦' ' ' <<<"$line") )
+    if [[ ! "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+        continue
+    fi
+    if [ "${elem[0]}" -eq 0 ]; then 
+        arrns[0]="${root_ns_arr[0]}"
+    elif [ -n "${elem[2]}" ] && [[ "${elem[2]}" =~ \.\.\.$ ]];then
+        # try to find full uri on root_ns_arr
+        lu="$(get_ns_by_short_uri "${elem[2]#*=}")"
+        arrns[${elem[0]}-1]="$lu"
+    elif [ -n "${elem[2]}" ] && [[ "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+        arrns[${elem[0]}-1]="${elem[2]}"
+    fi
+    #ii=${elem[0]}
+    #printf ">>arrns[%s] '%s' '%s'\n" "$ii" "${arrns[$ii]}" "${elem[2]}"
+done < <(printf "%s\n" "${xml_info[0]}" && printf '\0')
+
+echo -e "\nRoot Namespaces:"
+# make unique_ns_arr array ready for 'setns'
+IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${arrns[@]}" | make_unique_ns_arr)
+
+printf "  %s\n" "${root_ns_arr[@]}"
+echo -e "\nAll Namespaces:"
+printf "  %s\n" "${unique_ns_arr[@]}"
+
+echo
+#printf ">>I: %s\n" "${xml_info[@]}"
+
+xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[2]}")
 if [ -n "$xml_tree" ];then
     
     # Array with elements like <indent level>¬element, e.g. 3¬thead
@@ -419,25 +510,48 @@ if [ -n "$xml_tree" ];then
     # ################################################
     # generate xpaths from tree based on indentation
     # ################################################
+    ns_pfx=''
+    prev_ns_pfx=''
+    prev_ns_lvl=0
     for j in "${!xml_tree_ilvl[@]}"; do
         line=${xml_tree_ilvl[$j]}
+        if [ "$j" -le 0 ]; then
+            prev_line=''
+            prev_line_lvl=0
+        else
+            prev_line="${xml_tree_ilvl[$j-1]}"
+            prev_line_lvl="${prev_line%¬*}"
+        fi
+        
         # Get indent level from beginning of array element, e.g. 4¬div
         indent_lvl="${line%¬*}"
         prev_lvl=$((indent_lvl - 1))
         
-        ns_pfx=''
-        if [ "$isHtml" -eq 0 ] ; then #&& [ "$abs_path" -eq 1 ]
+        if [ "$isHtml" -eq 0 ] && [ "$abs_path" -eq 1 ]; then
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
             if [ "$line" = "${line%:*}" ] ;then
-                ns_pfx="$(get_default_ns_prefix):"
-
+                if [ -n "${arrns[$j]}" ]; then
+                    ns_pfx="$(get_ns_prefix_by_uri "${arrns[$j]}"):"
+                fi
                 # namespace prefix not found, try default (may be from -o option)
                 if [ -z "$ns_pfx" ] || [ "$ns_pfx" == ':' ]; then
+                    #echo "---> $j namespace prefix not found, try default ${ns_prefix}" >&2
                     ns_pfx="${ns_prefix}:"
                 fi
+            else
+                ns_pfx=''
             fi
-            
+#echo "--> $j '$line' <--> '$prev_line' -- '$ns_pfx' <--> '${prev_ns_pfx}' ~ $indent_lvl -le $prev_ns_lvl -- ns: '${arrns[$j]}'" >&2
+            if [[ -n "${arrns[$j]}" && "$ns_pfx" != "$prev_ns_pfx" ]];then 
+                prev_ns_lvl="$prev_line_lvl"
+                if [ "$indent_lvl" -le "$prev_ns_lvl" ];then
+                    prev_ns_pfx="$ns_pfx"
+                fi
+#FIXME: restore ns prefix when indentation equals the previous
+            elif [[ -z  "${arrns[$j]}" && "$indent_lvl" -eq "$prev_ns_lvl" ]];then
+                ns_pfx="$prev_ns_pfx"
+            fi
         fi
     
         if [ "$indent_lvl" -eq 0 ] ; then
@@ -495,7 +609,7 @@ else
 fi
 exec 3>&-
 exec 4>&-
-rm xff
-rm $fout
+rm $fifo_in
+rm $fifo_out
 echo
     
