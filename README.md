@@ -18,6 +18,7 @@ Table of contents
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Script help](#help)
 * [Known issues](#known-issues)
+* [Rationale](#rationale)
 
 ## Basic usage
 Get all element xpaths from an XML file. To show attribute XPaths also, add `-a` (absolute XPaths)
@@ -337,6 +338,68 @@ If -t option is passed it will print XML elements tree also
 	    note
 	    quantity
 	    price
+
+## Rationale
+It is a wrapper around `xmllint` interactive shell that automates the inspection of XML/HTML files, looking for XPath expressions taking into account namespaces.  
+The goal is to get as much information as possible without writing a parser. Code is focused on getting information and presenting the results as usefully as possible.  
+
+Main commands sent to interactive shell are:  
+
+**Find namespaces**
+
+```bash
+echo "ls /some/xpath/namespace::*" | xmllint --shell file.xml
+
+/ > ls /*/namespace::*[local-name()!='xml']
+n        1 default -> http://example.com/ns1
+n        1 soap -> http://schemas.xmlsoap.org/soap/envelope/
+...
+
+echo "xpath /some/xpath" | xmllint --shell file.xml
+
+/ > xpath /*//*
+Object is a Node Set :
+Set contains 3 nodes:
+1  ELEMENT soap:Body
+2  ELEMENT incident
+    default namespace href=http://example.com/ns2
+...
+```
+
+**Get elements tree**  
+Key command is `du` since it offers a tree representation with indented elements so "flattening" that tree provides simple XPath   
+expressions like `/feed/entry/title`. 
+
+```
+echo "du /" | xmllint --shell resources/wiki.xml 
+
+# result
+/ > du /
+/
+feed
+  id
+  title
+  link
+  subtitle
+  entry
+    id
+    title
+```
+
+**Get absolute xpath expressions**
+XPath expressions found by `du` command are used to find absolute XPath expressions. Namespaces must be set for this command to success.
+XPath for attributes could look like `/feed/entry/title/@*`.
+
+```
+(echo "setrootns"; echo "whereis /defaultns:feed/defaultns:entry/defaultns:title") | xmllint --shell resources/wiki.xml
+
+# result
+/ > setrootns
+/ > whereis /defaultns:feed/defaultns:entry/defaultns:title
+/*/*[8]/*[2]
+/*/*[9]/*[2]
+/*/*[10]/*[2]
+```
 
 ## Help
 
