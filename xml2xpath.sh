@@ -5,12 +5,12 @@
 # 
 
 script_name=$(basename "$0")
-version="0.9.2"
+version="0.10.0"
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
 #dbg_log="$HOME/tmp/a-sh-debug.log.$$"
-#PS4='+($?) $(date "+%s.%N")\011:$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
+#PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
 function version(){
     cat<<EOF-VER
@@ -18,6 +18,7 @@ xml2xpath.sh $version
 Author: Luis Muñoz
 EOF-VER
 }
+
 #---------------------------------------------------------------------------------------
 # Help.
 #---------------------------------------------------------------------------------------
@@ -91,6 +92,7 @@ xprefix=""
 isHtml=0
 abs_path=0
 print_tree=0
+max_elements=500000
 uniq_xp=1
 ns_prefix=''
 defns=''
@@ -102,11 +104,26 @@ lint_cmd=(xmllint --shell)
 dbg_cmd=(grep -v '\/ >')
 declare -a all_opts
 
+trap_with_arg() { # from https://stackoverflow.com/a/2183063/804678
+  local func="$1"; shift
+  for sig in "$@"; do
+    trap "$func $sig" "$sig"
+  done
+}
+
+stop() {
+  trap - SIGINT EXIT
+  printf '\n%s\n' "received $1, bye!"
+  rm -f "$fifo_in" "$fifo_out";
+  pkill -f xmllint
+  #kill -s SIGINT 0
+}
+
 #---------------------------------------------------------------------------------------
 # print to stderr
 #---------------------------------------------------------------------------------------
 function log_error(){
-    echo -e "$@" > /dev/stderr
+    echo -e "$@" >> /dev/stderr
 }
 
 #---------------------------------------------------------------------------------------
@@ -139,16 +156,75 @@ function set_html_opts(){
     lint_cmd[${#lint_cmd[@]}]="--html"
 }
 
+function parse_ns_from_xpath(){
+    while read -r -u 3 xline; do 
+        printf "%s\n" "$xline"
+        if [ "$xline" == "/ > dir $xuuid" ]; then
+            break 
+        fi 
+    done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¦\1/;ta }' \
+                  -e 's/^([0-9]{1,5}) *ELEMENT *([^ ]*)/\1¦\2/' \
+                  -e 's/(default)? ?namespace ([a-z0-9]+)? ?href=([^=]+)¦?/\1\2=\3/g' \
+                  -e '/^[1-9]/ P;D'  
+}
+
+function send_cmd(){
+    echo -e "$1" >&4
+}
+
+function stop_reading(){ 
+    [[ "$3" == "/ > bye" ]] || [[ -z "$1" || "$1" -eq "$2" ]]
+}
+
+function print_response(){
+    local limit=0
+    local how_many=1
+    [ -n "$1" ] && how_many="$1"
+    
+    while IFS=$'\n' read -r -u 3 xline; do
+         printf "%s\n" "$xline"
+        ((limit=limit+1))
+        if [ "$xline" == "/ > dir $xuuid" ] || stop_reading "$how_many" "$limit" "$xline" ; then
+            break 
+        fi 
+    done
+}
+
 #---------------------------------------------------------------------------------------
 # Get elements tree as provided by xmllint 'du' xmllint shell command 
 # and get all namespaces as provided by 'ls //namespace::*' xmllint shell command
 #---------------------------------------------------------------------------------------
 function get_xml_tree(){
     if [ -n "$xml_file" ]; then
-        (set_root_ns 
-        echo -e "ls /*/namespace::*[local-name()!='xml']\nls $xprefix/namespace::*[count(./parent::*/namespace::*)]"
-        echo "dir $xuuid"
-        echo "du $du_path") | "${lint_cmd[@]}" "$xml_file"
+        "${lint_cmd[@]}" "$xml_file" 1>&3 <&4 &
+        
+        # send commands to xmllint shell
+        set_root_ns >&4
+
+        if [ $isHtml -eq 0 ]; then
+            # xpath command contains namespace declaration at the node
+            #   so it will be used to make a lookup array since it provides element index.
+            send_cmd "xpath //*"
+            send_cmd "dir $xuuid"
+            parse_ns_from_xpath
+            send_cmd "dir $xuuid"
+            print_response "$max_elements"
+        else
+            send_cmd "\ndir $xuuid"
+            print_response 2
+        fi
+       
+        # namespaces at root element
+        send_cmd "ls /*/namespace::*[local-name()!='xml']"
+        # namespaces at root element descendants. Provides full length uris.
+        send_cmd "ls /*//*/namespace::*[count(./parent::*/namespace::*)]"
+        send_cmd "dir $xuuid"
+        print_response "$max_elements"
+        
+        send_cmd "du $du_path"
+        send_cmd "dir $xuuid"
+        print_response "$max_elements"
+        send_cmd "bye"
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
         exit 1
@@ -181,9 +257,9 @@ function set_root_ns(){
 function make_unique_ns_arr(){
     local ni=0
     local nsxx='defaultns'
-    if [ -n "${ns_prefix}" ];then
-        nsxx="${ns_prefix}"
-    fi
+#    if [ -n "${ns_prefix}" ];then
+#        nsxx="${ns_prefix}"
+#    fi
     sort_unique_keep_order | while IFS= read -r name_uri; do
         case "${name_uri%%=*}" in
             default)
@@ -202,15 +278,33 @@ function make_unique_ns_arr(){
     done
 }
 
+function get_ns_by_short_uri(){
+    for nu in "${root_ns_arr[@]}"; do
+        local query="${1}"
+        local uri="${nu#*=}"
+         if [ "${uri:0:40}" == "${query:0:40}" ];then
+            echo "${nu}"
+            break
+         fi
+    done
+}
+
 #---------------------------------------------------------------------------------------
 # Find namespace prefix by uri in array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
 function get_ns_prefix_by_uri(){
     for nu in "${unique_ns_arr[@]}"; do
+        local query="${1#*=}"
+        local uri="${nu#*=}"
+        local prefix="${nu%=*}"
         # Compare uri
-         if [ "${nu#*=}" == "${1#*=}" ]; then
+         if [ "${uri}" == "${query}" ]; then
             # return prefix
-            echo "${nu%=*}"
+            echo "${prefix}"
+            break
+         elif [[ "${query}" =~ \.\.\.$ ]] && [ "${uri:0:40}" == "${query:0:40}" ];then
+            # should not be needed
+            echo "${prefix}"
             break
          fi
     done
@@ -234,8 +328,13 @@ function get_default_ns_prefix(){
 # Print all xpaths
 #---------------------------------------------------------------------------------------
 function print_all_xpath(){
+    # set all root namespaces
+    for nu in "${root_ns_arr[@]}"; do
+        [ -n "$nu" ] && echo "setns $nu"
+    done
+    # set other namespaces found
     for nu in "${unique_ns_arr[@]}"; do
-        echo "setns $nu"
+        [ -n "$nu" ] && echo "setns $nu"
     done
     for i in "${!xpath_all[@]}"; do
         printf "whereis %s\nwhereis %s/@*\n" "${xpath_all[$i]}" "${xpath_all[$i]}"
@@ -268,11 +367,12 @@ function sort_unique_keep_order(){
 # Check initial conditions
 #---------------------------------------------------------------------------------------
 function init_env(){
-    if [ -z "$xsd" ] && [ -z "$xml_file" ]; then
-        log_error "FATAL: At least one of -d, -l or -x must be provided.\n"
+    if [[ -z "$xml_file"  || !  -f "$xml_file" ]] && [[ -z "$xsd"  || ! -f "$xsd" ]]; then
+        log_error "FATAL: At least one of -d, -l or -x must be provided and be an existing file.\n"
         print_usage
         exit 1
-    elif [ -f "$xsd" ] && [ -f "$xml_file" ]; then
+    fi
+    if [ -f "$xsd" ] && [ -f "$xml_file" ]; then
         log_error "WARNING: both -d and -x were provided, -d will be ignored.\n"
         xsd=''
     fi
@@ -282,6 +382,16 @@ function init_env(){
     else
         xprefix='/'
     fi
+
+    fifo_in='xffin'
+    fifo_out='xffout'
+    trap_with_arg 'stop' EXIT SIGINT SIGTERM SIGHUP
+    
+    [ ! -p "$fifo_in" ] && mkfifo "$fifo_in"
+    [ ! -p "$fifo_out" ] && mkfifo "$fifo_out"
+    
+    exec 3<>"$fifo_in"
+    exec 4<>"$fifo_out"
 }
 
 function clean_tmp_files(){
@@ -307,7 +417,7 @@ do
     f) tag1=$OPTARG
        all_opts[${#all_opts[@]}]="-f ; tag1=$tag1"
         ;;
-    g) dbg_cmd=(sed -En '/whereis/ s/^.*/\n&/p; /whereis|^[/] *> *$/! s/^.*/&/p')
+    g) dbg_cmd=(sed -En '/whereis/ s/^[/] > whereis (.*)/\nSearch: \1/p; /whereis|^([/] >)? *$/! s/^[/][^ ].*/&/p')
         abs_path=1
         all_opts[${#all_opts[@]}]="-g ; abs_path=$abs_path ; debug command: '$dbg_cmd'"
         ;;
@@ -353,19 +463,44 @@ fi
 echo -e "\nxml2xpath: find XPath expressions on $xml_file"
 printf "   %s\n" "${all_opts[@]}" 
 
-# Get XML namespaces and structure with xmllint
+# Get XML namespaces and doc tree with xmllint
 # 'dir $xuuid' kinda NoOp that provides a record separator for awk
 IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" -v ers="dir $xuuid\n" 'BEGIN{ RS=ers }{ print $0 fs }'  && printf '\0' )
 
 # Put all found namespaces in array as <prefix>=<uri>
-IFS=$'\n' read -r -d '' -a xml_ns_arr < <(printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
-#printf ">>>>> %s\n" "${xml_info[0]}"
-echo -e "\nNamespaces:"
-# make unique_ns_arr array ready for 'setns'
-IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${xml_ns_arr[@]}" | make_unique_ns_arr)
-printf "%s\n" "${unique_ns_arr[@]}"
+IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort_unique_keep_order)
 
-xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[1]}")
+declare -a arrns
+#arrns+=( "${root_ns_arr[@]}" )
+arrns[0]="${root_ns_arr[0]}"
+while IFS=$'\n' read -r line;do
+
+    elem=( $(tr '¦' ' ' <<<"$line") )
+    if [[ ! "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+        continue
+    fi
+    ((k=${elem[0]}-1))
+
+    # xpath command may truncate uri to around 40 characters
+    if [ -n "${elem[2]}" ] && [[ "${elem[2]}" =~ \.\.\.$ ]];then
+        # try to find full uri on root_ns_arr
+        lu="$(get_ns_by_short_uri "${elem[2]#*=}")"
+        arrns[$k]="$lu"
+    # element start with a number, a known one
+    elif [ -n "${elem[2]}" ] && [[ "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+        arrns[$k]="${elem[2]}"
+    fi
+done < <(printf "%s\n" "${xml_info[0]}" && printf '\0')
+
+echo -e "\nRoot Namespaces:"
+# make unique_ns_arr array ready for 'setns'
+IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${arrns[@]}" | make_unique_ns_arr)
+
+printf "  %s\n" "${root_ns_arr[@]}"
+echo -e "\nAll Namespaces:"
+printf "  %s\n" "${unique_ns_arr[@]}"
+
+xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[2]}")
 if [ -n "$xml_tree" ];then
     
     # Array with elements like <indent level>¬element, e.g. 3¬thead
@@ -377,25 +512,43 @@ if [ -n "$xml_tree" ];then
     # ################################################
     # generate xpaths from tree based on indentation
     # ################################################
+    ns_pfx=''
+    prev_ns_pfx=''
+    prev_ns_lvl=0
+    declare -a ns_by_indent_lvl
     for j in "${!xml_tree_ilvl[@]}"; do
         line=${xml_tree_ilvl[$j]}
+        if [ "$j" -le 0 ]; then
+            prev_line=''
+            prev_line_lvl=0
+        else
+            prev_line="${xml_tree_ilvl[$j-1]}"
+            prev_line_lvl="${prev_line%¬*}"
+        fi
+        
         # Get indent level from beginning of array element, e.g. 4¬div
         indent_lvl="${line%¬*}"
         prev_lvl=$((indent_lvl - 1))
         
-        ns_pfx=''
-        if [ "$isHtml" -eq 0 ] ; then #&& [ "$abs_path" -eq 1 ]
+        if [ "$isHtml" -eq 0 ] && [ "$abs_path" -eq 1 ]; then
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
             if [ "$line" = "${line%:*}" ] ;then
-                ns_pfx="$(get_default_ns_prefix):"
-
-                # namespace prefix not found, try default (may be from -o option)
-                if [ -z "$ns_pfx" ] || [ "$ns_pfx" == ':' ]; then
+                if [ -n "${arrns[$j]}" ]; then
+                    ns_pfx="$(get_ns_prefix_by_uri "${arrns[$j]}"):"
+                    ns_by_indent_lvl[$indent_lvl]="${arrns[$j]}"
+                elif [ -z "${arrns[$j]}" ] && [ "$indent_lvl" -gt "$prev_ns_lvl" ]; then
+                    ns_by_indent_lvl[$indent_lvl]="${ns_by_indent_lvl[$prev_lvl]}"
+                    ns_pfx="$(get_ns_prefix_by_uri "${ns_by_indent_lvl[$prev_lvl]}"):"
+                fi
+                # namespace prefix not found, try getting the last know at this tree level 
+                #  or the default (may be from -o option)
+                if [[ -z "$ns_pfx" || "$ns_pfx" == ':' ]]; then
                     ns_pfx="${ns_prefix}:"
                 fi
+            else
+                ns_pfx=''
             fi
-            
         fi
     
         if [ "$indent_lvl" -eq 0 ] ; then
@@ -426,9 +579,8 @@ if [ -n "$xml_tree" ];then
     fi
     # Print found xpath expressions to stdout
     if [ "$abs_path" -eq 1 ];then
-        
         # Show absolute xpath expressions including attributes
-        printf "\nFound %d XPath expressions (absolute, unique, use -r to override):\n\n" "${#xpath_all[@]}"
+        printf "\nFound %d XPath expressions (absolute, unique elements, use -r to override):\n\n" "${#xpath_all[@]}"
         
         if [ "$isHtml" -eq 1 ]; then
             print_all_xpath | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
@@ -438,8 +590,10 @@ if [ -n "$xml_tree" ];then
     else
         # Show xpath expressions
         if [ "${#xpath_all[@]}" -gt 0 ];then
-            printf "\nFound %d XPath expressions (unique, use -r to override):\n\n" "${#xpath_all[@]}"
-            printf "%s\n" "${xpath_all[@]}" | sort_unique_keep_order
+            ret=$(printf "%s\n" "${xpath_all[@]}" | sort_unique_keep_order)
+            uniq_count=$(printf "%s\n" "$ret" | sort_unique_keep_order | wc -l)
+            printf "\nFound %d XPath expressions (%d unique elements, use -r to override):\n\n" "${#xpath_all[@]}" "$uniq_count"
+            printf "%s\n" "$ret"
         else
             log_error "ERROR: should have not happened but the code reached here :-("
             clean_tmp_files
@@ -451,5 +605,9 @@ else
     clean_tmp_files
     exit 127
 fi
+exec 3>&-
+exec 4>&-
+rm $fifo_in
+rm $fifo_out
 echo
     

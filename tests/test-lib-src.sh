@@ -1,7 +1,7 @@
 #!/bin/bash
 #
-dbg=0
-[ -n "$dbg" ] && dbg=1
+DBG=0
+[ -n "$dbg" ] && DBG="$dbg"
 
 #---------------------------------------------------------------------------------------
 # Verify test case result and return result and description
@@ -42,7 +42,7 @@ function quote_opts(){
 # Run test case
 #---------------------------------------------------------------------------------------
 function show_errors(){
-    if [ "$dbg" -eq 1 ]; then
+    if [ "$DBG" -eq 1 ]; then
         tee /dev/stderr 2> >(show_color) | grep -Eq 'XPath error|No xpath found'
     else
         grep -Eq 'XPath error|No xpath found'
@@ -54,7 +54,7 @@ function show_errors(){
 #---------------------------------------------------------------------------------------
 function print_test_descr(){
     echo -e "\n$1   : ${!1}"
-    if [ "$dbg" -eq 1 ]; then
+    if [ "$DBG" -eq 1 ]; then
         topts=$(quote_opts "${test_opts[@]}")
             
         #echo "cmd    : ../xml2xpath.sh ${test_opts[*]} ${test_type_opts[*]}"
