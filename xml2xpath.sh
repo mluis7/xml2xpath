@@ -115,13 +115,14 @@ trap_with_arg() { # from https://stackoverflow.com/a/2183063/804678
 stop() {
   trap - SIGINT EXIT
   printf '\n%s\n' "received $1, bye!"
+  print_separator
   rm -f "$fifo_in" "$fifo_out";
   pkill -f xmllint
   #kill -s SIGINT 0
 }
 
 function print_separator(){
-    printf "%s (%s)" "$separator" "$(date '+%F %T %Z')"
+    printf "%s (%s)\n" "$separator" "$(date '+%F %T %Z')"
 }
 
 #---------------------------------------------------------------------------------------
@@ -222,7 +223,6 @@ function get_xml_tree(){
         # namespaces at root element
         send_cmd "ls /*/namespace::*[local-name()!='xml']"
         # namespaces at root element descendants. Provides full length uris.
-        #send_cmd "ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*)]"
         send_cmd "ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*[local-name()!='xml'])]"
         send_cmd "dir $xuuid"
         print_response "$max_elements"
@@ -457,7 +457,7 @@ do
     x) xml_file=$OPTARG
         all_opts[${#all_opts[@]}]="-x ; XML file: $xml_file"
         ;;
-    v) echo -e "xml2xpath.sh $version \nAuthor: Luis Muñoz"; exit;;
+    v) version; exit;;
     *) 
        echo "Invalid option $arg"
        print_help

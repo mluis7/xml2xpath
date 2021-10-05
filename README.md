@@ -16,6 +16,9 @@ Table of contents
 * [Using found XPaths](#using-found-xpaths)
 * [TL;DR](#tldr)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
+* [Performance](#performance)
+    - [Passing xpath expression of a single element](#passing-xpath-expression-of-a-single-element)
+    - [Extracting a single element to a file](#extracting-a-single-element-to-a-file)
 * [Script help](#help)
 * [Known issues](#known-issues)
 * [Rationale](#rationale)
@@ -400,6 +403,20 @@ XPath for attributes could look like `/feed/entry/title/@*`.
 /*/*[9]/*[2]
 /*/*[10]/*[2]
 ```
+
+## Performance
+Parsing big documents might take a long time. As an example, [this 1M elements sample document](http://aiweb.cs.washington.edu/research/projects/xmltk/xmldata/data/tpc-h/lineitem.xml.gz) took almost 2 hours to just find 17 different expressions. As many large xml documents, that sample has the same elements repeated many times.  
+This wrapper looks for XPath expressions, not content so inspecting just one of those many elements would be enough.  
+That can be done in 2 ways, specifying the xpath of the first know element or extracting that first element to another file as we'll see next.
+
+### Passing xpath expression of a single element
+
+    time xml2xpath.sh -a -g -s '/table/T[1]//*' -x big/lineitem.xml
+
+### Extracting a single element to a file
+This simple command will extract the first `entry` element to `wiki-1.xml` file. Parsing that file would be more efficient. 
+
+    (echo "setrootns"; echo "cd /defaultns:feed/defaultns:entry[1]"; echo "write wiki-1.xml"; echo "bye") | xmllint --shell --format wiki-big.xml
 
 ## Help
 
