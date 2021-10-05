@@ -92,12 +92,13 @@ xprefix=""
 isHtml=0
 abs_path=0
 print_tree=0
-max_elements=500000
+max_elements=1100000
 uniq_xp=1
 ns_prefix=''
 defns=''
 fs='¬'
 xuuid="x$(uuidgen --sha1 --namespace @url --name "$(hostname)/$script_name")"
+separator=$(printf '=%.0s' {1..80})
 
 # commands as array
 lint_cmd=(xmllint --shell)
@@ -117,6 +118,10 @@ stop() {
   rm -f "$fifo_in" "$fifo_out";
   pkill -f xmllint
   #kill -s SIGINT 0
+}
+
+function print_separator(){
+    printf "%s (%s)" "$separator" "$(date '+%F %T %Z')"
 }
 
 #---------------------------------------------------------------------------------------
@@ -163,7 +168,7 @@ function parse_ns_from_xpath(){
             break 
         fi 
     done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¦\1/;ta }' \
-                  -e 's/^([0-9]{1,5}) *ELEMENT *([^ ]*)/\1¦\2/' \
+                  -e 's/^([0-9]{1,8}) *ELEMENT *([^ ]*)/\1¦\2/' \
                   -e 's/(default)? ?namespace ([a-z0-9]+)? ?href=([^=]+)¦?/\1\2=\3/g' \
                   -e '/^[1-9]/ P;D'  
 }
@@ -217,7 +222,8 @@ function get_xml_tree(){
         # namespaces at root element
         send_cmd "ls /*/namespace::*[local-name()!='xml']"
         # namespaces at root element descendants. Provides full length uris.
-        send_cmd "ls /*//*/namespace::*[count(./parent::*/namespace::*)]"
+        #send_cmd "ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*)]"
+        send_cmd "ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*[local-name()!='xml'])]"
         send_cmd "dir $xuuid"
         print_response "$max_elements"
         
@@ -245,8 +251,15 @@ function set_root_ns(){
     if [ -n "$ns_prefix" ];then
         echo "setrootns"
         if [ -n "$defns" ] ;then
-            #echo "setns defaultns="
-            echo "setns $defns"
+            echo "setns defaultns="
+            #extns=( $(tr ',' ' ' <<<"$defns") )
+            OLD_IFS="$IFS"
+            IFS=$'¦' read -r -a extns <<<"$defns"
+            IFS=$"$OLD_IFS"
+            for n in "${extns[@]}"; do
+                echo "setns $n"
+            done
+            defns="${extns[0]}"
         fi
     fi
 }
@@ -262,7 +275,7 @@ function make_unique_ns_arr(){
 #    fi
     sort_unique_keep_order | while IFS= read -r name_uri; do
         case "${name_uri%%=*}" in
-            default)
+           default)
                 # -o ; if uri matches, override ns
                 if [ "${defns##*=}" == "${name_uri##*=}" ]; then
                     echo "${defns}"
@@ -461,6 +474,8 @@ fi
 # Start process
 # ################################################
 echo -e "\nxml2xpath: find XPath expressions on $xml_file"
+print_separator
+echo
 printf "   %s\n" "${all_opts[@]}" 
 
 # Get XML namespaces and doc tree with xmllint
@@ -472,14 +487,16 @@ IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed 
 
 declare -a arrns
 #arrns+=( "${root_ns_arr[@]}" )
-arrns[0]="${root_ns_arr[0]}"
+#arrns[0]="${root_ns_arr[0]}"
 while IFS=$'\n' read -r line;do
-
-    elem=( $(tr '¦' ' ' <<<"$line") )
-    if [[ ! "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+    OLD_IFS="$IFS"
+    IFS=$'¦' read -r -a elem <<<"$line"
+    IFS=$"$OLD_IFS"
+  
+    if [ "${elem[2]}" == "xml=http://www.w3.org/XML/1998/namespace" ] || [[ ! "${elem[0]}" =~ [[:digit:]]{1,} ]];then
         continue
     fi
-    ((k=${elem[0]}-1))
+    ((k=elem[0]-1))
 
     # xpath command may truncate uri to around 40 characters
     if [ -n "${elem[2]}" ] && [[ "${elem[2]}" =~ \.\.\.$ ]];then
@@ -491,14 +508,19 @@ while IFS=$'\n' read -r line;do
         arrns[$k]="${elem[2]}"
     fi
 done < <(printf "%s\n" "${xml_info[0]}" && printf '\0')
-
-echo -e "\nRoot Namespaces:"
+print_separator
 # make unique_ns_arr array ready for 'setns'
-IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${arrns[@]}" | make_unique_ns_arr)
-
-printf "  %s\n" "${root_ns_arr[@]}"
-echo -e "\nAll Namespaces:"
-printf "  %s\n" "${unique_ns_arr[@]}"
+IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${arrns[@]}" | make_unique_ns_arr | grep -v '^ *$')
+if [ "${#root_ns_arr[@]}" -gt 0 ] || [ "${#unique_ns_arr[@]}" -gt 0 ];then 
+    echo -e "\nRoot Namespaces:"
+    printf "  %s\n" "${root_ns_arr[@]}"
+    print_separator
+    echo -e "\nMapped Namespaces:"
+    printf "  %s\n" "${unique_ns_arr[@]}"
+else
+    printf "\nNamespaces: None\n"
+fi
+print_separator
 
 xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[2]}")
 if [ -n "$xml_tree" ];then
@@ -508,7 +530,7 @@ if [ -n "$xml_tree" ];then
     max_level=$(printf "%s\n" "${xml_tree_ilvl[@]}" | sort -nr -t '¬' | head -n1 | cut -d '¬' -f1)
     declare -a xpath_arr # tmp array to hold tree partially
     declare -a xpath_all # save all found xpath
-
+printf "\nElements to process (build xpath, add prefix) %d\n" "${#xml_tree_ilvl[@]}"
     # ################################################
     # generate xpaths from tree based on indentation
     # ################################################
@@ -530,7 +552,7 @@ if [ -n "$xml_tree" ];then
         indent_lvl="${line%¬*}"
         prev_lvl=$((indent_lvl - 1))
         
-        if [ "$isHtml" -eq 0 ] && [ "$abs_path" -eq 1 ]; then
+        if [ "$isHtml" -eq 0 ] && [ "$abs_path" -eq 1 ] && [ "${#unique_ns_arr[@]}" -gt 0 ]; then
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
             if [ "$line" = "${line%:*}" ] ;then
@@ -572,15 +594,17 @@ if [ -n "$xml_tree" ];then
         idx=${#xpath_all[@]}
         xpath_all[$idx]="${xprefix}${xpath}"
     done
-    
+
     # -t option was passed, show tree as is.
     if [ "$print_tree" -eq 1 ]; then
-        echo -e "XML tree:\n$xml_tree\n"
+        echo -e "\nXML tree:\n$xml_tree\n"
     fi
     # Print found xpath expressions to stdout
     if [ "$abs_path" -eq 1 ];then
         # Show absolute xpath expressions including attributes
-        printf "\nFound %d XPath expressions (absolute, unique elements, use -r to override):\n\n" "${#xpath_all[@]}"
+        printf "\nXPath expressions found: %d (absolute, unique elements, use -r to override)\n" "${#xpath_all[@]}"
+        print_separator
+        printf '\n'
         
         if [ "$isHtml" -eq 1 ]; then
             print_all_xpath | "${lint_cmd[@]}" "$xml_file" | "${dbg_cmd[@]}"
@@ -592,7 +616,7 @@ if [ -n "$xml_tree" ];then
         if [ "${#xpath_all[@]}" -gt 0 ];then
             ret=$(printf "%s\n" "${xpath_all[@]}" | sort_unique_keep_order)
             uniq_count=$(printf "%s\n" "$ret" | sort_unique_keep_order | wc -l)
-            printf "\nFound %d XPath expressions (%d unique elements, use -r to override):\n\n" "${#xpath_all[@]}" "$uniq_count"
+            printf "\nXPath expressions found: %d (%d unique elements, use -r to override)\n" "${#xpath_all[@]}" "$uniq_count"
             printf "%s\n" "$ret"
         else
             log_error "ERROR: should have not happened but the code reached here :-("
