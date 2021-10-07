@@ -283,6 +283,10 @@ Print more details by running as
 The command used for testing is shown in details. Run it to see it in action (adding missing quotes if needed :-p )
 
     ../xml2xpath.sh -a -s "//table[@id[.='t1'] and descendant::tr[@class='headerRow']]" -l resources/test.html
+    
+To log a trace of test commands to a file run
+
+    dbg=1; trace="$HOME/tmp/all-tests.log" ./test-all.sh
 
 ## Generate an XML from an XSD and show its XPaths
 If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.
