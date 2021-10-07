@@ -407,7 +407,7 @@ XPath for attributes could look like `/feed/entry/title/@*`.
 ## Performance
 Parsing big documents might take a long time. As an example, [this 1M elements sample document](http://aiweb.cs.washington.edu/research/projects/xmltk/xmldata/data/tpc-h/lineitem.xml.gz) took almost 2 hours to just find 17 different expressions. As many large xml documents, that sample has the same elements repeated many times.  
 This wrapper looks for XPath expressions, not content so inspecting just one of those many elements would be enough.  
-That can be done in 2 ways, specifying the xpath of the first know element or extracting that first element to another file as we'll see next.
+That can be done in 2 ways, specifying the xpath of the first known element or extracting that first element to another file as we'll see next.
 
 ### Passing xpath expression of a single element
 
