@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.10.0"
+version="0.11.0"
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
@@ -61,17 +61,17 @@ XSD options:
   
 Examples:
 
-  Print all xpaths and elements tree                                xml2xpath.sh -t -x test.xml
+  xml2xpath.sh -t -x test.xml                                          Print all xpaths and elements tree
 
-  Print xpaths starting at //shipto element                         xml2xpath.sh -s '//shipto' -x test.xml
+  xml2xpath.sh -s '//shipto' -x test.xml                               Print xpaths starting at //shipto element
     
-  Print xpaths from generated xml                                   xml2xpath.sh -a -f shiporder -d tests/resources/shiporder.xsd 
+  xml2xpath.sh -a -f shiporder -d tests/resources/shiporder.xsd        Print xpaths from generated xml
 
-  Use namespaces, show absolute paths and xmllint shell messages    xml2xpath.sh -a -n -g -x wiki.xml
+  xml2xpath.sh -a -n -g -x wiki.xml                                    Use namespaces, show absolute paths and xmllint shell messages
     
-  Add a namespace definition and use it in a relative expression    xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+  xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml  Add a namespace definition and use it in a relative expression    
     
-  Html file with absolute paths option                              xml2xpath.sh -a -n -l test.html
+  xml2xpath.sh -a -n -l test.html                                      Html file with absolute paths option
 
 Reporting bugs:
   https://github.com/mluis7/xml2xpath/issues
@@ -162,6 +162,12 @@ function set_html_opts(){
     lint_cmd[${#lint_cmd[@]}]="--html"
 }
 
+#---------------------------------------------------------------------------------------
+# Parse namespaces from 'ls /*/namespace::*'
+#   n        1 default -> http://www.w3.org/1999/xhtml
+# to
+#   default=http://www.w3.org/1999/xhtml
+#---------------------------------------------------------------------------------------
 function parse_ns_from_xpath(){
     while read -r -u 3 xline; do 
         printf "%s\n" "$xline"
@@ -174,6 +180,9 @@ function parse_ns_from_xpath(){
                   -e '/^[1-9]/ P;D'  
 }
 
+#---------------------------------------------------------------------------------------
+# Sent xmllint shell commands to running instance
+#---------------------------------------------------------------------------------------
 function send_cmd(){
     echo -e "$1" >&4
 }
@@ -252,7 +261,6 @@ function set_root_ns(){
         echo "setrootns"
         if [ -n "$defns" ] ;then
             echo "setns defaultns="
-            #extns=( $(tr ',' ' ' <<<"$defns") )
             OLD_IFS="$IFS"
             IFS=$'¦' read -r -a extns <<<"$defns"
             IFS=$"$OLD_IFS"
@@ -269,13 +277,10 @@ function set_root_ns(){
 #---------------------------------------------------------------------------------------
 function make_unique_ns_arr(){
     local ni=0
-    local nsxx="${ns_prefix}" #'defaultns'
-#    if [ -n "${ns_prefix}" ];then
-#        nsxx="${ns_prefix}"
-#    fi
+    local nsxx="${ns_prefix}"
     sort_unique_keep_order | while IFS= read -r name_uri; do
         case "${name_uri%%=*}" in
-           default)
+           default|"${defns%%=*}")
                 # -o ; if uri matches, override ns
                 if [ "${defns##*=}" == "${name_uri##*=}" ]; then
                     echo "${defns}"
@@ -291,6 +296,9 @@ function make_unique_ns_arr(){
     done
 }
 
+#---------------------------------------------------------------------------------------
+# Find namespace prefix from truncated uri like default=http://example.com/somelonguri...
+#---------------------------------------------------------------------------------------
 function get_ns_by_short_uri(){
     for nu in "${root_ns_arr[@]}"; do
         local query="${1}"
@@ -396,7 +404,7 @@ function init_env(){
         xprefix='/'
     fi
     
-    if [ -z "$ns_prefix" ];then
+    if [ "$isHtml" -eq 0 ] && [ -z "$ns_prefix" ];then
         ns_prefix="defaultns"
     fi
 
@@ -421,7 +429,7 @@ while getopts ad:D:f:ghl:no:p:rs:tx:v arg
 do
   case $arg in
     a) abs_path=1
-       all_opts[${#all_opts[@]}]="-a ; abs_path=$abs_path" 
+       all_opts[${#all_opts[@]}]="-a ; 'abs_path=$abs_path'" 
         ;;
     h) print_help; exit;;
     d) xsd=$OPTARG
@@ -432,18 +440,18 @@ do
        keep_xml=1
        ;;
     f) tag1=$OPTARG
-       all_opts[${#all_opts[@]}]="-f ; tag1=$tag1"
+       all_opts[${#all_opts[@]}]="-f ; 'tag1=$tag1'"
         ;;
     g) dbg_cmd=(sed -En '/whereis/ s/^[/] > whereis (.*)/\nSearch: \1/p; /whereis|^([/] >)? *$/! s/^[/][^ ].*/&/p')
         abs_path=1
-        all_opts[${#all_opts[@]}]="-g ; abs_path=$abs_path ; debug command: '$dbg_cmd'"
+        all_opts[${#all_opts[@]}]="-g ; 'abs_path=$abs_path' ; debug command: '$dbg_cmd'"
         ;;
     n|p) [ -n "$OPTARG" ] && ns_prefix=$OPTARG && all_opts[${#all_opts[@]}]="-p ; ns prefix=$ns_prefix"
          [ -z "$OPTARG" ] && ns_prefix="defaultns" && all_opts[${#all_opts[@]}]="-n ; default ns prefix: $ns_prefix"
         ;;
     o) defns="$OPTARG"
         ns_prefix=$(cut -d '=' -f1 <<<"$defns")
-        all_opts[${#all_opts[@]}]="-o ; ns prefix: $ns_prefix ; default ns override: $defns"
+        all_opts[${#all_opts[@]}]="-o ; ns prefix: '$ns_prefix' ; default ns override: '$defns'"
         ;;
     r) uniq_xp=0;;
     s) du_path=$OPTARG
@@ -456,10 +464,10 @@ do
     l) 
         xml_file=$OPTARG
         set_html_opts
-        all_opts[${#all_opts[@]}]="-l ; HTML file: $xml_file"
+        all_opts[${#all_opts[@]}]="-l ; HTML file: '$xml_file'"
         ;;
     x) xml_file=$OPTARG
-        all_opts[${#all_opts[@]}]="-x ; XML file: $xml_file"
+        all_opts[${#all_opts[@]}]="-x ; XML file: '$xml_file'"
         ;;
     v) version; exit;;
     *) 
@@ -488,7 +496,6 @@ IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" -v ers="
 
 # Put all found namespaces in array as <prefix>=<uri>
 IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort_unique_keep_order)
-printf ">> %s\n" "${xml_info[@]}" 
 
 declare -a arrns
 #arrns+=( "${root_ns_arr[@]}" )
@@ -498,7 +505,7 @@ while IFS=$'\n' read -r line;do
     IFS=$'¦' read -r -a elem <<<"$line"
     IFS=$"$OLD_IFS"
   
-    if [ "${elem[2]}" == "xml=http://www.w3.org/XML/1998/namespace" ] || [[ ! "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+    if [ "${elem[2]}" == "xml=http://www.w3.org/XML/1998/namespace" ] || [[ ! "${elem[0]}" =~ ^[[:digit:]]{1,} ]];then
         continue
     fi
     ((k=elem[0]-1))
@@ -507,6 +514,7 @@ while IFS=$'\n' read -r line;do
         # uri matches or it's the first element
         if [[ "${elem[2]#*=}" == "${defns#*=}" || "$k" -eq 0 ]]; then
             arrns[$k]="$defns"
+#            echo "<<< $k $line '${elem[0]}' '${elem[1]}' '${elem[2]}' '$defns'"
             continue
         fi
     fi
@@ -516,7 +524,7 @@ while IFS=$'\n' read -r line;do
         lu="$(get_ns_by_short_uri "${elem[2]#*=}")"
         arrns[$k]="$lu"
     # element start with a number, a known one
-    elif [ -n "${elem[2]}" ] && [[ "${elem[0]}" =~ [[:digit:]]{1,} ]];then
+    elif [ -n "${elem[2]}" ] && [[ "${elem[0]}" =~ ^[[:digit:]]{1,} ]];then
         arrns[$k]="${elem[2]}"
     fi
 done < <(printf "%s\n" "${xml_info[0]}" && printf '\0')

@@ -21,6 +21,7 @@ Table of contents
     - [Extracting a single element to a file](#extracting-a-single-element-to-a-file)
 * [Script help](#help)
 * [Known issues](#known-issues)
+* [Generate man page](#generate-man-page)
 * [Rationale](#rationale)
 
 ## Basic usage
@@ -423,8 +424,8 @@ This simple command will extract the first `entry` element to `wiki-1.xml` file.
 ```text
 Print XPath present on xml or (if possible) xsd files. Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file.
 
-Usage: xml2xpath.sh [-h] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
-       xml2xpath.sh [-h] [COMMON OPTIONS] [XSD OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
+Usage: xml2xpath.sh [-h -v] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
+       xml2xpath.sh [-h -v] [XSD OPTIONS] [COMMON XML/HTML OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
 
 
 Options:
@@ -457,21 +458,28 @@ XSD options:
   
 Examples:
 
-  Print all xpaths and elements tree                                xml2xpath.sh -t -x test.xml
+  xml2xpath.sh -t -x test.xml                                          Print all xpaths and elements tree
 
-  Print xpaths starting at //shipto element                         xml2xpath.sh -s '//shipto' -x test.xml
+  xml2xpath.sh -s '//shipto' -x test.xml                               Print xpaths starting at //shipto element
     
-  Print xpaths from generated xml                                   xml2xpath.sh -a -f shiporder -d tests/resources/shiporder.xsd 
+  xml2xpath.sh -a -f shiporder -d tests/resources/shiporder.xsd        Print xpaths from generated xml
 
-  Use namespaces, show absolute paths and xmllint shell messages    xml2xpath.sh -a -n -g -x wiki.xml
+  xml2xpath.sh -a -n -g -x wiki.xml                                    Use namespaces, show absolute paths and xmllint shell messages
     
-  Add a namespace definition and use it in a relative expression    xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml | sort | uniq
+  xml2xpath.sh -o 'defns=urn:hl7-org:v3' -s '//defns:addr' -x HL7.xml  Add a namespace definition and use it in a relative expression    
     
-  Html file with absolute paths option                              xml2xpath.sh -a -n -l test.html
+  xml2xpath.sh -a -n -l test.html                                      Html file with absolute paths option
 
 Reporting bugs:
   https://github.com/mluis7/xml2xpath/issues
 ```
-        
+
+## Generate man page
+Use this command with `help2man` utility  
+`help2man --locale=en_US --no-info --help-option='-h' --version-option='-v' xml2xpath.sh -o man/xml2xpath.sh.1`
+
+To test the generated man page use:  
+`MANPATH="./man" man man/xml2xpath.sh.1`
+
 ## Known issues
 * Multiple default namespaces in document: `-o` and/or `-s` may give [incorrect results](https://stackoverflow.com/questions/69380381/send-command-output-back-to-previous-subshell-in-pipe-for-processing).
