@@ -19,7 +19,7 @@ rel_xpath='//incident'
 echo "*** XML tests - Namespaces on root element and body ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
-TC02="Replace defaultns prefix, relative path"
+TC02="Replace default namespace definition (-o), relative path (-s)"
 
 test_run "TC01"
 test_result "$?"

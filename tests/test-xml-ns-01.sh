@@ -16,7 +16,7 @@ rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'
 echo "*** XML tests - namespaces on root element ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
-TC02="Replace 'defaultns' prefix (-o), start at relative path (-s)"
+TC02="Replace default namespace definition (-o), relative path (-s)"
 TC03="Find nodes using namespaces (-n)"
 TC04="Find nodes by absolute xpath using namespaces (-a -n)"
 

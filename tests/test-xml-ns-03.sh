@@ -23,7 +23,7 @@ echo "*** XHTML tests - Namespaces on root element and body. Multiple default na
 # Test case descriptions
 TC01="Basic test (-x)"
 TC02="Replace 'defaultns' prefix (-p)"
-TC03="Replace defaultns prefix (-o), relative path (-s)"
+TC03="Replace default namespace definition (-o), relative path (-s)"
 
 
 test_run "TC01"
