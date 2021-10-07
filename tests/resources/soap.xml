@@ -3,6 +3,9 @@
     <incident xmlns="http://example.com/ns2">
         <Company type="String">Test</Company>
     </incident>
+    <incident1 xmlns="http://example.com/ns1">
+        <Company1 type="String">Test</Company1>
+    </incident1>
 </soap:Body>
 </soap:Envelope>
 

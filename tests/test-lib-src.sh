@@ -3,6 +3,9 @@
 DBG=0
 [ -n "$dbg" ] && DBG="$dbg"
 
+TRACE_FILE='/dev/null'
+[[ -n "$trace" && "$trace" != '/dev/null' ]] && TRACE_FILE="$trace" ;
+ 
 #---------------------------------------------------------------------------------------
 # Verify test case result and return result and description
 #---------------------------------------------------------------------------------------
@@ -53,11 +56,10 @@ function show_errors(){
 # Run test case
 #---------------------------------------------------------------------------------------
 function print_test_descr(){
-    echo -e "\n$1   : ${!1}"
+    descr="\n$1   : ${!1}"
+    echo -e "$descr"
     if [ "$DBG" -eq 1 ]; then
         topts=$(quote_opts "${test_opts[@]}")
-            
-        #echo "cmd    : ../xml2xpath.sh ${test_opts[*]} ${test_type_opts[*]}"
         echo "cmd    : ../xml2xpath.sh $topts ${test_type_opts[*]}"
     fi
 }
@@ -71,7 +73,8 @@ function test_run(){
         exit 1
     fi
     print_test_descr "$1"
-    ../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}" 2>&1 1>/dev/null | show_errors
+    print_test_descr "$1" >>"$TRACE_FILE"
+    ../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}" 2>&1 1>>"$TRACE_FILE" | show_errors
 }
 
 #---------------------------------------------------------------------------------------
