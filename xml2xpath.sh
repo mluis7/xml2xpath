@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.11.0"
+version="0.11.1"
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
@@ -160,6 +160,17 @@ function set_html_opts(){
     lint_cmd[${#lint_cmd[@]}]="--nowrap"
     lint_cmd[${#lint_cmd[@]}]="--recover"
     lint_cmd[${#lint_cmd[@]}]="--html"
+    #lint_cmd[${#lint_cmd[@]}]="--nowarning"
+}
+
+function is_read_error(){
+    if [ "$1" -ge 128 ]; then
+        log_error "Timeout reading from file descriptor $1 $2"
+    elif [ "$1" -gt 0 ]; then
+        log_error "Error reading from file descriptor: $1 $2"
+    fi
+    read_error="$1"
+    return "$1"
 }
 
 #---------------------------------------------------------------------------------------
@@ -169,7 +180,8 @@ function set_html_opts(){
 #   default=http://www.w3.org/1999/xhtml
 #---------------------------------------------------------------------------------------
 function parse_ns_from_xpath(){
-    while read -r -u 3 xline; do 
+    
+    while read -r -u 3 -t 3 xline || is_read_error "$?" "(parse ns stage1)"; do 
         printf "%s\n" "$xline"
         if [ "$xline" == "/ > dir $xuuid" ]; then
             break 
@@ -177,7 +189,7 @@ function parse_ns_from_xpath(){
     done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¦\1/;ta }' \
                   -e 's/^([0-9]{1,8}) *ELEMENT *([^ ]*)/\1¦\2/' \
                   -e 's/(default)? ?namespace ([a-z0-9]+)? ?href=([^=]+)¦?/\1\2=\3/g' \
-                  -e '/^[1-9]/ P;D'  
+                  -e '/^[1-9]/ P;D'
 }
 
 #---------------------------------------------------------------------------------------
@@ -195,14 +207,18 @@ function print_response(){
     local limit=0
     local how_many=1
     [ -n "$1" ] && how_many="$1"
+    read_error=0
     
-    while IFS=$'\n' read -r -u 3 xline; do
+    while IFS=$'\n' read -r -u 3 -t 3 xline || is_read_error "$?" "$2"; do
          printf "%s\n" "$xline"
         ((limit=limit+1))
         if [ "$xline" == "/ > dir $xuuid" ] || stop_reading "$how_many" "$limit" "$xline" ; then
             break 
         fi 
     done
+    if [ "$read_error" -gt 0 ];then
+        exit "$read_error"
+    fi
 }
 
 #---------------------------------------------------------------------------------------
@@ -223,10 +239,11 @@ function get_xml_tree(){
             send_cmd "dir $xuuid"
             parse_ns_from_xpath
             send_cmd "dir $xuuid"
-            print_response "$max_elements"
+            print_response "$max_elements" "(ns stage1)"
+            
         else
             send_cmd "\ndir $xuuid"
-            print_response 2
+            print_response 2 "(ns stage)"
         fi
        
         # namespaces at root element
@@ -234,11 +251,11 @@ function get_xml_tree(){
         # namespaces at root element descendants. Provides full length uris.
         send_cmd "ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*[local-name()!='xml'])]"
         send_cmd "dir $xuuid"
-        print_response "$max_elements"
+        print_response "$max_elements" "(ns stage2)"
         
         send_cmd "du $du_path"
         send_cmd "dir $xuuid"
-        print_response "$max_elements"
+        print_response "$max_elements" "(du stage)"
         send_cmd "bye"
     else
         log_error "ERROR: No XML file. Either provide an XSD to create an instance from (-d option) or pass the path to an XML valid file"
@@ -567,7 +584,7 @@ printf "\nElements to process (build xpath, add prefix) %d\n" "${#xml_tree_ilvl[
         if [ "$isHtml" -eq 0 ] && [ "${#unique_ns_arr[@]}" -gt 0 ]; then #&& [ "$abs_path" -eq 1 ] 
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
-            if [ "$line" = "${line%:*}" ] ;then
+            if [ "$line" = "${line%:*}" ] && [ -n "$(get_default_ns_prefix)" ] ;then
                 if [ -n "${arrns[$j]}" ]; then
                     ns_pfx="$(get_ns_prefix_by_uri "${arrns[$j]}"):"
                     ns_by_indent_lvl[$indent_lvl]="${arrns[$j]}"
