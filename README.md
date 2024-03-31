@@ -4,6 +4,8 @@ Extract and list XPath expressions from XML/HTML file. Latest version shows XPat
 A wrapper around `xmllint` tool that provides convenience options to inspect documents listing namespaces and xpaths expressions.
 By default, shows xpaths expressions starting at the root element but it can start at a predefined element passed from command line as an xpath expression.
 
+<h3> &#x24D8; Check pyxml2xpath python implementation <a href="https://github.com/mluis7/pyxml2xpath">here</a>!</h3>
+
 Table of contents
 =================
 
@@ -14,7 +16,7 @@ Table of contents
 * [Default namespaces](#default-namespaces)
 * [XPath expressions at a given element](#xpath-expressions-at-a-given-element)
 * [Using found XPaths](#using-found-xpaths)
-* [TL;DR](#tldr)
+* [TL;DR](#tl-dr)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Performance](#performance)
     - [Passing xpath expression of a single element](#passing-xpath-expression-of-a-single-element)
