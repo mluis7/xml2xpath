@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<root xmlns:m="path_example1"
+       xmlns:c="path_example2">
+        
+      <m:ele>
+        <c:name>with namespace</c:name>
+        <c:type>qualified</c:type>
+     </m:ele>
+
+     <noprefix>
+      <type>unqualified</type>
+     </noprefix>
+</root>

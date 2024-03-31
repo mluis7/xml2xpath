@@ -15,3 +15,6 @@ echo -e "$sep"
 
 echo -e "$sep"
 ./test-xml-ns-03.sh
+
+echo -e "$sep"
+./test-xml-ns-no-default.sh
