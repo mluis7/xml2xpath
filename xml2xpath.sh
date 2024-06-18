@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.11.1"
+version="0.11.2"
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
@@ -97,8 +97,10 @@ uniq_xp=1
 ns_prefix=''
 defns=''
 fs='¬'
+rtout="${XML_XPATH_RTOUT:-5}"
 xuuid="x$(uuidgen --sha1 --namespace @url --name "$(hostname)/$script_name")"
 separator=$(printf '=%.0s' {1..80})
+XPID="$$"
 
 # commands as array
 lint_cmd=(xmllint --shell)
@@ -165,9 +167,9 @@ function set_html_opts(){
 
 function is_read_error(){
     if [ "$1" -ge 128 ]; then
-        log_error "Timeout reading from file descriptor $1 $2"
+        log_error "\nTimeout reading from file descriptor $1 $2 . Current timeout: $rtout secs. Try extending the timeout with: XML_XPATH_RTOUT=[int or float > $rtout] xml2xpath.sh ...\n"
     elif [ "$1" -gt 0 ]; then
-        log_error "Error reading from file descriptor: $1 $2"
+        log_error "\nError reading from file descriptor: $1 $2\n"
     fi
     read_error="$1"
     return "$1"
@@ -181,7 +183,7 @@ function is_read_error(){
 #---------------------------------------------------------------------------------------
 function parse_ns_from_xpath(){
     
-    while read -r -u 3 -t 3 xline || is_read_error "$?" "(parse ns stage1)"; do 
+    while read -r -u 3 -t "$rtout" xline || is_read_error "$?" "(parse ns stage1)"; do 
         printf "%s\n" "$xline"
         if [ "$xline" == "/ > dir $xuuid" ]; then
             break 
@@ -209,7 +211,7 @@ function print_response(){
     [ -n "$1" ] && how_many="$1"
     read_error=0
     
-    while IFS=$'\n' read -r -u 3 -t 3 xline || is_read_error "$?" "$2"; do
+    while IFS=$'\n' read -r -u 3 -t "$rtout" xline || is_read_error "$?" "$2"; do
          printf "%s\n" "$xline"
         ((limit=limit+1))
         if [ "$xline" == "/ > dir $xuuid" ] || stop_reading "$how_many" "$limit" "$xline" ; then
@@ -522,7 +524,10 @@ while IFS=$'\n' read -r line;do
     IFS=$'¦' read -r -a elem <<<"$line"
     IFS=$"$OLD_IFS"
   
-    if [ "${elem[2]}" == "xml=http://www.w3.org/XML/1998/namespace" ] || [[ ! "${elem[0]}" =~ ^[[:digit:]]{1,} ]];then
+    if [ "${elem[2]}" == "xml=http://www.w3.org/XML/1998/namespace" ];then
+        continue
+    fi
+    if [[ ! "${elem[0]}" =~ ^[[:digit:]]{1,}$ ]];then
         continue
     fi
     ((k=elem[0]-1))
