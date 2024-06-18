@@ -21,6 +21,7 @@ Table of contents
 * [Performance](#performance)
     - [Passing xpath expression of a single element](#passing-xpath-expression-of-a-single-element)
     - [Extracting a single element to a file](#extracting-a-single-element-to-a-file)
+    - [Timeouts](#timeouts)
 * [Script help](#help)
 * [Known issues](#known-issues)
 * [Generate man page](#generate-man-page)
@@ -415,6 +416,22 @@ XPath for attributes could look like `/feed/entry/title/@*`.
 Parsing big documents might take a long time. As an example, [this 1M elements sample document](http://aiweb.cs.washington.edu/research/projects/xmltk/xmldata/data/tpc-h/lineitem.xml.gz) took almost 2 hours to just find 17 different expressions. As many large xml documents, that sample has the same elements repeated many times.  
 This wrapper looks for XPath expressions, not content so inspecting just one of those many elements would be enough.  
 That can be done in 2 ways, specifying the xpath of the first known element or extracting that first element to another file as we'll see next.
+
+### Timeouts
+Occasionally an due to external factors like computer performance, antivirus, etc., the script [could fail with a timeout error](https://github.com/mluis7/xml2xpath/issues/11)
+
+`Timeout reading from file descriptor 142 (parse ns stage1) . Current timeout: 5 secs. Try extending the timeout with: XML_XPATH_RTOUT=[int or float > 5] xml2xpath.sh ...`
+
+Read timeout can be extended by setting/using `XML_XPATH_RTOUT` environmental variable
+
+```
+export XML_XPATH_RTOUT=15
+./xml2xpath.sh -x tests/resources/HL7.xml
+```
+
+Or
+
+`XML_XPATH_RTOUT=15 ./xml2xpath.sh -x tests/resources/HL7.xml`
 
 ### Passing xpath expression of a single element
 
