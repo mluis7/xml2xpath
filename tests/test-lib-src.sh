@@ -5,7 +5,11 @@ DBG=0
 
 TRACE_FILE='/dev/null'
 [[ -n "$trace" && "$trace" != '/dev/null' ]] && TRACE_FILE="$trace" ;
- 
+
+echo_with_pid(){
+	printf "[%d] %b\n" "$$" "$@"
+}
+
 #---------------------------------------------------------------------------------------
 # Verify test case result and return result and description
 #---------------------------------------------------------------------------------------
@@ -16,16 +20,16 @@ function test_result(){
     tc_result="FAILED"
     if [ "$1" -eq "$retval" ]; then
         tc_result="PASSED"
-        echo "${tc_result}"
+        echo_with_pid "${tc_result}"
     else
-        echo "${tc_result}" | show_color
+        echo_with_pid "${tc_result}" | show_color
     fi
     
 }
 
 function show_color(){
     while read -r line; do 
-        echo -e "  \e[01;31m$line\e[0m" >&2
+        echo -e "\e[01;31m$line\e[0m"
     done
 }
 
@@ -56,11 +60,11 @@ function show_errors(){
 # Run test case
 #---------------------------------------------------------------------------------------
 function print_test_descr(){
-    descr="\n$1   : ${!1}"
-    echo -e "$descr"
+    descr="$1   : ${!1}"
+    echo_with_pid "$descr"
     if [ "$DBG" -eq 1 ]; then
         topts=$(quote_opts "${test_opts[@]}")
-        echo "cmd    : ../xml2xpath.sh $topts ${test_type_opts[*]}"
+        echo_with_pid "cmd    : ../xml2xpath.sh $topts ${test_type_opts[*]}"
     fi
 }
 
@@ -69,7 +73,7 @@ function print_test_descr(){
 #---------------------------------------------------------------------------------------
 function test_run(){
     if [ ! -f "${test_type_opts[${#test_type_opts[@]} - 1]}" ]; then
-        echo "ERROR file not found: ${test_type_opts[${#test_type_opts[@]} - 1]}"  | show_color
+        echo_with_pid "ERROR file not found: ${test_type_opts[${#test_type_opts[@]} - 1]}"  | show_color
         exit 1
     fi
     print_test_descr "$1"
