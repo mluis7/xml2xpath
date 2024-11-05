@@ -9,7 +9,7 @@ xml_file="resources/nodefaultns.xml"
 test_opts=()
 test_type_opts=(-x "$xml_file")
 
-echo "*** XML tests - namespaces on root element but no default ns ($script_name) ***"
+echo_with_pid "*** XML tests - namespaces on root element but no default ns ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
 

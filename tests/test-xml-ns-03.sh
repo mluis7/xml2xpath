@@ -19,7 +19,7 @@ xml_file="resources/html5.html"
 test_opts=()
 test_type_opts=(-x "$xml_file")
 
-echo "*** XHTML tests - Namespaces on root element and body. Multiple default namespaces across document. ($script_name) ***"
+echo_with_pid "*** XHTML tests - Namespaces on root element and body. Multiple default namespaces across document. ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
 TC02="Replace 'defaultns' prefix (-p)"

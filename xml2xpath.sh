@@ -116,10 +116,10 @@ trap_with_arg() { # from https://stackoverflow.com/a/2183063/804678
 
 stop() {
   trap - SIGINT EXIT
-  printf '\n%s\n' "received $1, bye!"
+  printf '\n%s\n' "[$$] received $1, bye!"
   print_separator
   rm -f "$fifo_in" "$fifo_out";
-  pkill -f xmllint
+  pkill --parent $$ -f xmllint
   #kill -s SIGINT 0
 }
 
@@ -131,7 +131,7 @@ function print_separator(){
 # print to stderr
 #---------------------------------------------------------------------------------------
 function log_error(){
-    echo -e "$@" >> /dev/stderr
+    printf "%b" "$@" >> /dev/stderr
 }
 
 #---------------------------------------------------------------------------------------
@@ -167,9 +167,9 @@ function set_html_opts(){
 
 function is_read_error(){
     if [ "$1" -ge 128 ]; then
-        log_error "\nTimeout reading from file descriptor $1 $2 . Current timeout: $rtout secs. Try extending the timeout with: XML_XPATH_RTOUT=[int or float > $rtout] xml2xpath.sh ...\n"
+        log_error "\n[$$] Timeout reading from file descriptor $1 $2 . Current timeout: $rtout secs. Try extending the timeout with: XML_XPATH_RTOUT=[int or float > $rtout] xml2xpath.sh ...\n"
     elif [ "$1" -gt 0 ]; then
-        log_error "\nError reading from file descriptor: $1 $2\n"
+        log_error "\n[$$] Error reading from file descriptor: $1 $2\n"
     fi
     read_error="$1"
     return "$1"
@@ -427,12 +427,12 @@ function init_env(){
         ns_prefix="defaultns"
     fi
 
-    fifo_in='xffin'
-    fifo_out='xffout'
+    fifo_in="/tmp/xffin.$$"
+    fifo_out="/tmp/xffout.$$"
     trap_with_arg 'stop' EXIT SIGINT SIGTERM SIGHUP
     
-    [ ! -p "$fifo_in" ] && mkfifo "$fifo_in"
-    [ ! -p "$fifo_out" ] && mkfifo "$fifo_out"
+    [ ! -p "$fifo_in" ] && mkfifo --mode=600 "$fifo_in"
+    [ ! -p "$fifo_out" ] && mkfifo --mode=600 "$fifo_out"
     
     exec 3<>"$fifo_in"
     exec 4<>"$fifo_out"
@@ -504,7 +504,7 @@ fi
 # ################################################
 # Start process
 # ################################################
-echo -e "\nxml2xpath: find XPath expressions on $xml_file"
+echo -e "\n[$$] xml2xpath: find XPath expressions on $xml_file"
 print_separator
 echo
 printf "   %s\n" "${all_opts[@]}" 

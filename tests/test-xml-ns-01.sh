@@ -13,7 +13,7 @@ test_opts=()
 test_type_opts=(-x "$xml_file")
 rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'
 
-echo "*** XML tests - namespaces on root element ($script_name) ***"
+echo_with_pid "*** XML tests - namespaces on root element ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
 TC02="Replace default namespace definition (-o), relative path (-s)"

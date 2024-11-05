@@ -20,7 +20,7 @@ TC05="HTML absolute paths with duplicates (-a -r)"
 TC06="HTML relative paths (-s) containing axes expression axes::elem"
 # TODO: invalid html 
 
-echo "*** HTML tests ($script_name) ***"
+echo_with_pid "Test Suite *** HTML tests ($script_name) ***"
 test_run "TC01"
 test_result "$?"
 
