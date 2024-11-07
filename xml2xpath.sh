@@ -5,26 +5,30 @@
 # 
 
 script_name=$(basename "$0")
-version="0.11.2"
+version="0.12.1"
+
+if [ -f "VERSION" ];then
+	read version < VERSION
+fi
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
 #dbg_log="$HOME/tmp/a-sh-debug.log.$$"
 #PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
-function version(){
-    cat<<EOF-VER
+version(){
+    cat<<EOF_VER
 xml2xpath.sh $version
 Author: Luis Muñoz
-EOF-VER
+EOF_VER
 }
 
 #---------------------------------------------------------------------------------------
 # Help.
 #---------------------------------------------------------------------------------------
 usage_str="$script_name [-h -v] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]"
-function print_help(){
-    cat<<EOF-MAN
+print_help(){
+    cat<<EOF_MAN
 Print XPath present on xml or (if possible) xsd files. Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file.
 
 Usage: $usage_str
@@ -73,13 +77,18 @@ Examples:
     
   xml2xpath.sh -a -n -l test.html                                      Html file with absolute paths option
 
-Reporting bugs:
-  https://github.com/mluis7/xml2xpath/issues
+Environment:
+  XML_XPATH_RTOUT  Set XML file the read timeout. Default 5s.
 
-EOF-MAN
+  XMLBEANS_HOME  Set Apache XmlBeans home for xml instance creation from xsd file. Default: /usr/share/java/xmlbeans
+
+Bugs:
+  Report found bugs or feature requests at https://github.com/mluis7/xml2xpath/issues
+
+EOF_MAN
 }
 
-function print_usage(){
+print_usage(){
     echo "Usage: $usage_str"
 }
 
@@ -98,6 +107,7 @@ ns_prefix=''
 defns=''
 fs='¬'
 rtout="${XML_XPATH_RTOUT:-5}"
+XMLBEANS_HOME="${XMLBEANS_HOME:-/usr/share/java/xmlbeans}"
 xuuid="x$(uuidgen --sha1 --namespace @url --name "$(hostname)/$script_name")"
 separator=$(printf '=%.0s' {1..80})
 XPID="$$"
@@ -123,22 +133,22 @@ stop() {
   #kill -s SIGINT 0
 }
 
-function print_separator(){
+print_separator(){
     printf "%s (%s)\n" "$separator" "$(date '+%F %T %Z')"
 }
 
 #---------------------------------------------------------------------------------------
 # print to stderr
 #---------------------------------------------------------------------------------------
-function log_error(){
+log_error(){
     printf "%b" "$@" >> /dev/stderr
 }
 
 #---------------------------------------------------------------------------------------
 # generate XML from XSD. Requires xmlbeans package.
 #---------------------------------------------------------------------------------------
-function create_xml_instance(){
-    if [ ! -x /usr/bin/xsd2inst ]; then
+create_xml_instance(){
+    if ! which xsd2inst > /dev/null 2>&1 || [ ! -d "$XMLBEANS_HOME" ]; then
         log_error "FATAL: packages xmlbeans, xmlbeans-scripts are not installed but are required for -d option. Aborting."
         exit 1
     fi
@@ -149,15 +159,16 @@ function create_xml_instance(){
     if [ -z "$xml_file_tmp" ]; then
         xml_file_tmp=$(mktemp)
     fi
-    echo -e "Creating XML instance starting at element $tag1 from $xsd\n"
-    XMLBEANS_LIB='/usr/share/java/xmlbeans/' xsd2inst "$xsd" -name "$tag1" > "$xml_file_tmp"
+    echo -e "Creating XML instance starting at element $tag1 from $xsd (XMLBEANS_HOME=${XMLBEANS_HOME})\n"
+    XMLBEANS_LIB=$XMLBEANS_HOME/lib xsd2inst "$xsd" -name "$tag1" | grep '^ *<' > "$xml_file_tmp"
+	#cat "$xml_file_tmp"
     xml_file="$xml_file_tmp"
 }
 
 #---------------------------------------------------------------------------------------
 # Set xmllint HTML options
 #---------------------------------------------------------------------------------------
-function set_html_opts(){
+set_html_opts(){
     isHtml=1
     lint_cmd[${#lint_cmd[@]}]="--nowrap"
     lint_cmd[${#lint_cmd[@]}]="--recover"
@@ -165,7 +176,7 @@ function set_html_opts(){
     #lint_cmd[${#lint_cmd[@]}]="--nowarning"
 }
 
-function is_read_error(){
+is_read_error(){
     if [ "$1" -ge 128 ]; then
         log_error "\n[$$] Timeout reading from file descriptor $1 $2 . Current timeout: $rtout secs. Try extending the timeout with: XML_XPATH_RTOUT=[int or float > $rtout] xml2xpath.sh ...\n"
     elif [ "$1" -gt 0 ]; then
@@ -181,7 +192,7 @@ function is_read_error(){
 # to
 #   default=http://www.w3.org/1999/xhtml
 #---------------------------------------------------------------------------------------
-function parse_ns_from_xpath(){
+parse_ns_from_xpath(){
     
     while read -r -u 3 -t "$rtout" xline || is_read_error "$?" "(parse ns stage1)"; do 
         printf "%s\n" "$xline"
@@ -197,15 +208,15 @@ function parse_ns_from_xpath(){
 #---------------------------------------------------------------------------------------
 # Sent xmllint shell commands to running instance
 #---------------------------------------------------------------------------------------
-function send_cmd(){
+send_cmd(){
     echo -e "$1" >&4
 }
 
-function stop_reading(){ 
+stop_reading(){ 
     [[ "$3" == "/ > bye" ]] || [[ -z "$1" || "$1" -eq "$2" ]]
 }
 
-function print_response(){
+print_response(){
     local limit=0
     local how_many=1
     [ -n "$1" ] && how_many="$1"
@@ -227,7 +238,7 @@ function print_response(){
 # Get elements tree as provided by xmllint 'du' xmllint shell command 
 # and get all namespaces as provided by 'ls //namespace::*' xmllint shell command
 #---------------------------------------------------------------------------------------
-function get_xml_tree(){
+get_xml_tree(){
     if [ -n "$xml_file" ]; then
         "${lint_cmd[@]}" "$xml_file" 1>&3 <&4 &
         
@@ -268,14 +279,14 @@ function get_xml_tree(){
 #---------------------------------------------------------------------------------------
 # Return tree elements in the form <indent level>¬element, e.g. 3¬thead
 #---------------------------------------------------------------------------------------
-function get_xml_tree_ilvl(){
+get_xml_tree_ilvl(){
     printf "%s\n" "$1" | gawk '{ $0=gensub(/( *)([^ ]+)/, "\\1¬\\2","g",$0); split($0, a, /¬/); print length(a[1])/2 "¬" a[2] }'
 }
 
 #---------------------------------------------------------------------------------------
 # Set namespaces present on root element
 #---------------------------------------------------------------------------------------
-function set_root_ns(){
+set_root_ns(){
     if [ -n "$ns_prefix" ];then
         echo "setrootns"
         if [ -n "$defns" ] ;then
@@ -294,7 +305,7 @@ function set_root_ns(){
 #---------------------------------------------------------------------------------------
 #  Generate elements for unique_ns_arr (unique namespaces), mapping default ones to distinct prefixes.
 #---------------------------------------------------------------------------------------
-function make_unique_ns_arr(){
+make_unique_ns_arr(){
     local ni=0
     local nsxx="${ns_prefix}"
     sort_unique_keep_order | while IFS= read -r name_uri; do
@@ -318,7 +329,7 @@ function make_unique_ns_arr(){
 #---------------------------------------------------------------------------------------
 # Find namespace prefix from truncated uri like default=http://example.com/somelonguri...
 #---------------------------------------------------------------------------------------
-function get_ns_by_short_uri(){
+get_ns_by_short_uri(){
     for nu in "${root_ns_arr[@]}"; do
         local query="${1}"
         local uri="${nu#*=}"
@@ -332,7 +343,7 @@ function get_ns_by_short_uri(){
 #---------------------------------------------------------------------------------------
 # Find namespace prefix by uri in array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
-function get_ns_prefix_by_uri(){
+get_ns_prefix_by_uri(){
     for nu in "${unique_ns_arr[@]}"; do
         local query="${1#*=}"
         local uri="${nu#*=}"
@@ -353,7 +364,7 @@ function get_ns_prefix_by_uri(){
 #---------------------------------------------------------------------------------------
 # Find first default namespace prefix in array
 #---------------------------------------------------------------------------------------
-function get_default_ns_prefix(){
+get_default_ns_prefix(){
     for nu in "${unique_ns_arr[@]}"; do
         # Compare prefix
          if [ "${nu%=*}" == "${ns_prefix}" ]; then
@@ -367,7 +378,7 @@ function get_default_ns_prefix(){
 #---------------------------------------------------------------------------------------
 # Print all xpaths
 #---------------------------------------------------------------------------------------
-function print_all_xpath(){
+print_all_xpath(){
     # set all root namespaces
     for nu in "${root_ns_arr[@]}"; do
         [ -n "$nu" ] && echo "setns $nu"
@@ -384,7 +395,7 @@ function print_all_xpath(){
 #---------------------------------------------------------------------------------------
 # Print unique xpaths keepeing original order
 #---------------------------------------------------------------------------------------
-function print_unique_xpath(){
+print_unique_xpath(){
     if [ "$uniq_xp" -eq 1 ] ; then
         sort_unique_keep_order
     else
@@ -399,14 +410,14 @@ function print_unique_xpath(){
 # b    a
 # a
 #---------------------------------------------------------------------------------------
-function sort_unique_keep_order(){
+sort_unique_keep_order(){
     nl -s "$fs" -nln | tr -s -d '\011\r' ' ' | sort -t "$fs" -k2,2 | uniq --skip-fields=1 | sort -t "$fs" -n -k1,1 | cut -d "$fs" -f2,3
 }
 
 #---------------------------------------------------------------------------------------
 # Check initial conditions
 #---------------------------------------------------------------------------------------
-function init_env(){
+init_env(){
     if [[ -z "$xml_file"  || !  -f "$xml_file" ]] && [[ -z "$xsd"  || ! -f "$xsd" ]]; then
         log_error "FATAL: At least one of -d, -l or -x must be provided and be an existing file.\n"
         print_usage
@@ -438,7 +449,7 @@ function init_env(){
     exec 4<>"$fifo_out"
 }
 
-function clean_tmp_files(){
+clean_tmp_files(){
     if [ "$keep_xml" -eq 0 ] && [ -f "$xml_file_tmp" ]; then
         rm "$xml_file_tmp"
     fi
