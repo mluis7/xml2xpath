@@ -1,10 +1,10 @@
 # xml2xpath
-Extract and list XPath expressions from XML/HTML file. Latest version shows XPath attributes as well.
+Command line XPath expressions generator. Works on XML/HTML files and includes attributes as well.
 
 A wrapper around `xmllint` tool that provides convenience options to inspect documents listing namespaces and xpaths expressions.
 By default, shows xpaths expressions starting at the root element but it can start at a predefined element passed from command line as an xpath expression.
 
-<h3> &#x24D8; Check pyxml2xpath python implementation <a href="https://github.com/mluis7/pyxml2xpath">here</a>!</h3>
+<h3> &#x24D8; Check <a href="https://github.com/mluis7/pyxml2xpath">pyxml2xpath</a> python implementation <a href="https://github.com/mluis7/pyxml2xpath">here</a>!</h3>
 
 Table of contents
 =================
