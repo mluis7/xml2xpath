@@ -6,6 +6,8 @@ By default, shows xpaths expressions starting at the root element but it can sta
 
 <h3> &#x24D8; Check <a href="https://github.com/mluis7/pyxml2xpath">pyxml2xpath</a> python implementation <a href="https://github.com/mluis7/pyxml2xpath">here</a>!</h3>
 
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=WBY3Y35L2P7UQ)
+
 Table of contents
 =================
 
