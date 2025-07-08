@@ -112,6 +112,7 @@ rtout="${XML_XPATH_RTOUT:-5}"
 XMLBEANS_HOME="${XMLBEANS_HOME:-/usr/share/java/xmlbeans}"
 xuuid="x$(uuidgen --sha1 --namespace @url --name "$(hostname)/$script_name")"
 separator=$(printf '=%.0s' {1..80})
+ts0=$(date '+%s')
 
 # commands as array
 lint_cmd=(xmllint --shell)
@@ -127,7 +128,8 @@ trap_with_arg() { # from https://stackoverflow.com/a/2183063/804678
 
 stop() {
   trap - SIGINT EXIT
-  print_separator "[$$] received $1, bye!"
+  ts1=$(date '+%s')
+  print_separator "[$$] received $1 after $(date -d "1970-01-01 + $((ts1-ts0)) seconds" '+%T'), bye!"
   print_separator
   rm -f "$fifo_in" "$fifo_out";
   pkill --parent $$ -f xmllint
