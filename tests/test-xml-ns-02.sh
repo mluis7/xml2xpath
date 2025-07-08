@@ -25,6 +25,6 @@ test_run "TC01"
 test_result "$?"
 
 # PASSED: Replace defaultns prefix, relative path
-test_opts=(-o 'defns=http://example.com/ns2' -s "//defns:incident")
+test_opts=(-o 'defns=http://example.com/ns1' -s "//defns:incident")
 test_run "TC02"
 test_result "$?"
