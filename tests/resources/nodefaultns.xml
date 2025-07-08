@@ -6,7 +6,9 @@
         <c:name>with namespace</c:name>
         <c:type>qualified</c:type>
      </m:ele>
-
+     <t:t1 xmlns:t="path_example3">
+       <t:t2>t2 ns</t:t2>
+     </t:t1>
      <noprefix>
       <type>unqualified</type>
      </noprefix>

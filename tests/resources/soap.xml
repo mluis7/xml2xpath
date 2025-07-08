@@ -1,4 +1,4 @@
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><!-- xmlns="http://example.com/ns0"-->
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://example.com/ns0">
 <soap:Body>
     <a/>
     <incident xmlns="http://example.com/ns1"> <!--   -->

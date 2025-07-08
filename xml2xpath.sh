@@ -26,7 +26,7 @@ EOF_VER
 #---------------------------------------------------------------------------------------
 # Help.
 #---------------------------------------------------------------------------------------
-usage_str="$script_name [-h -v] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]"
+usage_str="$script_name [-h -v -q] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]"
 print_help(){
     cat<<EOF_MAN
 Print XPath present on xml or (if possible) xsd files. Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file.
@@ -56,7 +56,7 @@ HTML options:
 XML options:
   -n    Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
   -o    Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
-  -p    Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
+  -p    Namespace prefix to use. No need to pass -n if used and takes precedence if it is.
   -x    xml file, will take precedence over -d option.
 
 XSD options:
@@ -336,20 +336,6 @@ make_unique_ns_arr(){
 }
 
 #---------------------------------------------------------------------------------------
-# Find namespace prefix from truncated uri like default=http://example.com/somelonguri...
-#---------------------------------------------------------------------------------------
-get_ns_by_short_uri_unused(){
-    for nu in "${root_ns_arr[@]}"; do
-        local query="${1}"
-        local uri="${nu#*=}"
-         if [ "${uri:0:40}" == "${query:0:40}" ];then
-            echo "${nu}"
-            break
-         fi
-    done
-}
-
-#---------------------------------------------------------------------------------------
 # Find namespace prefix by uri in array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
 get_ns_prefix_by_uri(){
@@ -381,21 +367,15 @@ get_ns_prefix_by_uri(){
 #---------------------------------------------------------------------------------------
 get_default_ns_prefix(){
     local pfx=''
-    end="${#all_ns_arr[@]}"
-    #for (( i=end; i>=0; i-- )); do
-    #    nu="${all_ns_arr[$i]}"
     for nu in "${arrns[@]}"; do
         # Compare prefix
-        #if [ "${nu%=*}" == "${ns_prefix}" ]; then
-        if grep -Eq "^(default|${ns_prefix}[0-9]+)" <<<"${nu%=*}"; then
+        patt="^(default|${ns_prefix}[0-9]+)"
+        if [[ "${nu%=*}" =~ $patt ]]; then
             # return renamed prefix
             pfx="$(get_ns_prefix_by_uri "${nu}")"
             if [ -n "$pfx" ];then
-                #printf ">>> %s %s %s %s\n" "$i" "$end" "'$nu'" "'^${pfx}'" 1>&2
                 echo "$pfx:"
                 break
-            #else
-                #printf "<<< %s %s %s %s\n" "$i" "$end" "'$nu'" "'^${pfx}'" 1>&2
             fi
         fi
     done
@@ -509,7 +489,7 @@ do
         all_opts[${#all_opts[@]}]="-g ; 'abs_path=$abs_path' ; debug command: 'whereis <xpath>'"
         ;;
     n|p) [ -n "$OPTARG" ] && ns_prefix=$OPTARG && all_opts[${#all_opts[@]}]="-p ; ns prefix=$ns_prefix"
-         [ -z "$OPTARG" ] && ns_prefix="defaultns" && all_opts[${#all_opts[@]}]="-n ; default ns prefix: $ns_prefix"
+         [ -z "$ns_prefix" ] && ns_prefix="defaultns" && all_opts[${#all_opts[@]}]="-n ; default ns prefix: $ns_prefix"
         ;;
     q) quiet=1
     	;;
@@ -563,22 +543,17 @@ print_separator "${all_opts[@]}"
 # Get XML namespaces and doc tree with xmllint
 # 'dir $xuuid' kinda NoOp that provides a record separator for awk
 IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" -v ers="dir $xuuid\n" 'BEGIN{ RS=ers }{ print $0 fs }'  && printf '\0' )
-#print_separator
-#echo "_____________ xml_info _______________________"
-#printf '%s\n' "${xml_info[@]}"
-#echo "_____________ END xml_info _______________________"
-#print_separator
+
 # Put all found namespaces in array as <prefix>=<uri>
 IFS=$'\n' read -r -d '' -a all_ns_arr < <(printf "%s\n" "${xml_info[2]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
 IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort_unique_keep_order)
 root_and_all=( "${root_ns_arr[@]}" )
 root_and_all+=( "${all_ns_arr[@]}" )
-#print_separator
-#printf " --- %s\n" "${all_ns_arr[@]}" | nl
+
 declare -a arrns
 #arrns+=( "${root_ns_arr[@]}" )
-#arrns[0]="${root_ns_arr[0]}"
-k=0
+arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z";done)"
+k=1
 while IFS=$'\n' read -r line;do
     #echo "<<< $k $line '$defns'"
     if [ "${line##*=}" == "http://www.w3.org/XML/1998/namespace" ];then
@@ -603,13 +578,12 @@ while IFS=$'\n' read -r line;do
     fi
     ((k=k+1))
 done < <(printf "%s\n" "${all_ns_arr[@]}")
-#printf " --- %s\n" "${arrns[@]}" | nl -v0
 print_separator
 # make unique_ns_arr array ready for 'setns'
 
 IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${root_and_all[@]}" | make_unique_ns_arr | grep -v '^ *$')
 if [ "${#root_ns_arr[@]}" -gt 0 ] || [ "${#unique_ns_arr[@]}" -gt 0 ];then 
-    print_separator "\nRoot Namespaces:"
+    print_separator "\nOriginal Namespaces:"
     print_separator "${root_ns_arr[@]}"
     print_separator
     print_separator "\nMapped Namespaces:"
@@ -632,10 +606,9 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
     # generate xpaths from tree based on indentation
     # ################################################
     ns_pfx=''
-    prev_ns_lvl=0
-    last_dflt_pfx=''
-    last_dflt_idx=0
+    # keep an array of default namespaces by indent level
     declare -a ns_by_indent_lvl
+    ns_by_indent_lvl[0]="${arrns[0]}"
     for j in "${!xml_tree_ilvl[@]}"; do
         line=${xml_tree_ilvl[$j]}
         
@@ -643,39 +616,37 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
         indent_lvl="${line%¬*}"
         prev_lvl=$((indent_lvl - 1))
         
-        if [ "$isHtml" -eq 0 ] && [ "${#unique_ns_arr[@]}" -gt 0 ]; then #&& [ "$abs_path" -eq 1 ] 
+        if [ "$isHtml" -eq 0 ] && [ "${#unique_ns_arr[@]}" -gt 0 ]; then
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
 
             if [ "$line" = "${line%:*}" ] && [ -n "$(get_default_ns_prefix)" ] ;then
             	current_ns="${arrns[$j]}"
+            	if [ -z "${ns_by_indent_lvl[$indent_lvl]}" ];then
+                	ns_by_indent_lvl[$indent_lvl]="$current_ns"
+                fi
                 if [ -n "$current_ns" ]; then
-                    ns_pfx="$(get_ns_prefix_by_uri "$current_ns"):"
-                    prev_ns_lvl="$indent_lvl"
-                    last_dflt_pfx="$ns_pfx"
-                    last_dflt_idx="$j"
-                    ns_by_indent_lvl[$indent_lvl]="$current_ns"
+                    ns_pfx="$(get_ns_prefix_by_uri "$current_ns")"
                 elif [ -z "$current_ns" ]; then #&& [ -n "$last_dflt_pfx" ]
-                    #last_dflt_pfx="$(get_default_ns_prefix "$j")"
-                	if [[ "$indent_lvl" -gt "$prev_ns_lvl" || "$indent_lvl" -gt "$prev_lvl" ]]; then
-                		ns_pfx="$last_dflt_pfx"
-                    elif [[ "$j" -le "$last_dflt_idx" ]]; then
-                        ns_pfx="$(get_default_ns_prefix "$last_dflt_idx")"
-                	#else
-                		last_dflt_pfx=''
-                	fi
+                    ns_pfx="$(get_ns_prefix_by_uri "${ns_by_indent_lvl[$prev_lvl]}")"
                 fi
             else
                 # the element has its own prefix
                 ns_pfx=''
             fi
-            #printf " >>>>> %s %s %s %s	\n" "$j" "$ns_pfx" "$line" "$current_ns"
+            # no default namespace declared on current level, reuse previous one
+            if [ -z "${ns_by_indent_lvl[$indent_lvl]}" ];then
+            	ns_by_indent_lvl[$indent_lvl]="${ns_by_indent_lvl[$prev_lvl]}"
+            fi
+            if [ -n "$ns_pfx" ];then
+            	ns_pfx+=":"
+            fi
         fi
-
+		element="${line#*¬}"
         if [ "$indent_lvl" -eq 0 ] ; then
             if [ "$du_path" == '/' ]; then
                 #no indent level, xpath root
-                xpath_arr[0]="${ns_pfx}${line#*¬}"
+                xpath_arr[0]="${ns_pfx}$element"
                 xpath="${xpath_arr[0]}"
             elif [ "$du_path" != '/' ]; then
                 # an xpath expression has been provided with -s so first element is discarded
@@ -685,7 +656,7 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
             fi
         elif [ "$indent_lvl" -gt 0 ] && [ "$indent_lvl" -le "$max_level" ]; then
             # append element to previous by indentation level
-            xpath="${xpath_arr[$prev_lvl]}/${ns_pfx}${line#*¬}"
+            xpath="${xpath_arr[$prev_lvl]}/${ns_pfx}$element"
             # store current xpath
             xpath_arr[$indent_lvl]="${xpath}"
         fi

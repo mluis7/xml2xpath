@@ -447,7 +447,7 @@ This simple command will extract the first `entry` element to `wiki-1.xml` file.
 ```text
 Print XPath present on xml or (if possible) xsd files. Based on xmllint utility, try to build all possible XPaths from an XML instance. The latter could be constructed from a provided XSD file.
 
-Usage: xml2xpath.sh [-h -v] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
+Usage: xml2xpath.sh [-h -v -q] [-d file -f <tag name>] [-a -g -t -s <xpath>] [-n -p <ns prefix> -o <prefix>=URI -x <file>] [-l <file>]
        xml2xpath.sh [-h -v] [XSD OPTIONS] [COMMON XML/HTML OPTIONS] [XML OPTIONS] [HMTL OPTIONS]
 
 
@@ -455,6 +455,7 @@ Options:
 
 Basic:
   -h    print this help message.
+  -q    do not print information messages, just xpath list.
   -v    print version
 
 XML/HTML Common Options:
@@ -471,7 +472,7 @@ HTML options:
 XML options:
   -n    Set namespaces found on root element. Default namespace prefix is 'defaultns' but may be overriden with -o option.
   -o    Override the default namespace definition by passing <prefix>=URI, e.g.: -o 'defns=urn:hl7-org:v3'
-  -p    Namespace prefix to use. No need to pass -n if used. EXPERIMENTAL.
+  -p    Namespace prefix to use. No need to pass -n if used and takes precedence if it is.
   -x    xml file, will take precedence over -d option.
 
 XSD options:
@@ -493,8 +494,13 @@ Examples:
     
   xml2xpath.sh -a -n -l test.html                                      Html file with absolute paths option
 
-Reporting bugs:
-  https://github.com/mluis7/xml2xpath/issues
+Environment:
+  XML_XPATH_RTOUT  Set XML file the read timeout. Default 5s.
+
+  XMLBEANS_HOME  Set Apache XmlBeans home for xml instance creation from xsd file. Default: /usr/share/java/xmlbeans
+
+Bugs:
+  Report found bugs or feature requests at https://github.com/mluis7/xml2xpath/issues
 ```
 
 ## Generate man page
@@ -505,4 +511,4 @@ To test the generated man page use:
 `MANPATH="./man" man man/xml2xpath.sh.1`
 
 ## Known issues
-* Multiple default namespaces in document: `-o` and/or `-s` may give [incorrect results](https://stackoverflow.com/questions/69380381/send-command-output-back-to-previous-subshell-in-pipe-for-processing).
+* No one! ... that I know of :-p but [performance](#performance) with big documents can always be an issue.
