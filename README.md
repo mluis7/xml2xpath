@@ -291,6 +291,10 @@ To log a trace of test commands to a file run
 
     dbg=1; trace="$HOME/tmp/all-tests.log" ./test-all.sh
 
+To test several instances running in background or simultaneously (issue #15)
+
+    BG=1 ./test-all.sh
+
 ## Generate an XML from an XSD and show its XPaths
 If an XSD file is provided and **xmlbeans** package is installed, try to create an XML instance and print the XPath from it.
 
