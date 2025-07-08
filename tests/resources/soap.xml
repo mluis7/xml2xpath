@@ -1,11 +1,13 @@
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://example.com/ns1">
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns="http://example.com/ns0">
 <soap:Body>
-    <incident xmlns="http://example.com/ns2">
+    <a/>
+    <incident xmlns="http://example.com/ns1"> <!--   -->
         <Company type="String">Test</Company>
     </incident>
-    <incident1 xmlns="http://example.com/ns1">
+    <incident1 xmlns="http://example.com/ns2">
         <Company1 type="String">Test</Company1>
     </incident1>
+    <a/>
 </soap:Body>
 </soap:Envelope>
 
