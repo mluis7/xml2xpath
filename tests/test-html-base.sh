@@ -38,9 +38,9 @@ test_result "$?"
 
 test_opts=(-a -r)
 print_test_descr "TC05"
-dup_cnt=$(test_run_count)
+dup_cnt=$(test_run_basic_count)
 test_opts=(-a)
-uniq_cnt=$(test_run_count)
+uniq_cnt=$(test_run_basic_count)
 #[ ! "$dup_cnt" -gt "$uniq_cnt" ] && echo "duplicates: $dup_cnt -gt $uniq_cnt $?"
 [ ! "$dup_cnt" -gt "$uniq_cnt" ]
 test_result "$?"

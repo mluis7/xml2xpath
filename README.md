@@ -517,4 +517,5 @@ To test the generated man page use:
 `MANPATH="./man" man man/xml2xpath.sh.1`
 
 ## Known issues
-* No one! ... that I know of :-p but [performance](#performance) with big documents can always be an issue.
+* `-p` might give inconsistent namespace prefixes on documents with multiple namespaces.  
+[Performance](#performance) with big documents can always be an issue.

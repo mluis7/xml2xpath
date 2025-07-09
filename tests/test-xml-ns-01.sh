@@ -10,7 +10,7 @@ script_name=$(basename "$0")
 source test-lib-src.sh
 xml_file="resources/HL7.xml"
 test_opts=()
-test_type_opts=(-x "$xml_file")
+test_type_opts=("$xml_file")
 rel_xpath='/defaultns:ClinicalDocument/defaultns:recordTarget'
 
 echo_with_pid "*** XML tests - namespaces on root element ($script_name) ***"
@@ -19,6 +19,7 @@ TC01="Basic test (-x)"
 TC02="Replace default namespace definition (-o), relative path (-s)"
 TC03="Find nodes using namespaces (-n)"
 TC04="Find nodes by absolute xpath using namespaces (-a -n)"
+TC05="Count nodes with replaced default namespace definition (-o), relative path (-s)"
 
 test_run "TC01"
 test_result "$?"
@@ -39,4 +40,9 @@ test_result "$?"
 # xml2xpath.sh -a -g -n -s '/defaultns:ClinicalDocument/defaultns:recordTarget' -x HL7.xml
 test_opts=(-a -n -s "${rel_xpath}")
 test_run "TC04"
+test_result "$?"
+
+test_opts=('-q' '-n' '-o' 'defns=urn:hl7-org:v3' '-s' '//defns:addr')
+#xml2xpath.sh "${test_opts[@]}" -x "$xml_file" | grep -q 'XPath error'
+test_run_count "TC05"
 test_result "$?"

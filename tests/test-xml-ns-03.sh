@@ -17,14 +17,14 @@ script_name=$(basename "$0")
 source test-lib-src.sh
 xml_file="resources/html5.html"
 test_opts=()
-test_type_opts=(-x "$xml_file")
+test_type_opts=( "$xml_file" )
 
 echo_with_pid "*** XHTML tests - Namespaces on root element and body. Multiple default namespaces across document. ($script_name) ***"
 # Test case descriptions
 TC01="Basic test (-x)"
 TC02="Replace 'defaultns' prefix (-p)"
 TC03="Replace default namespace definition (-o), relative path (-s)"
-
+TC04="Test count of nodes TC03 is greater than 0 for all found expressions"
 
 test_run "TC01"
 test_result "$?"
@@ -40,3 +40,6 @@ test_opts=(-o 'dft01=http://www.w3.org/1998/Math/MathML' -s '//dft01:math/dft01:
 test_run "TC03"
 test_result "$?"
 
+test_opts=("-q" '-n' "-o" 'dft01=http://www.w3.org/1998/Math/MathML' -s '//dft01:math/dft01:mrow/dft01:mn')
+test_run_count "TC04"
+test_result "$?"
