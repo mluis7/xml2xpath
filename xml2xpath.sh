@@ -13,8 +13,8 @@ fi
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
-dbg_log="$HOME/tmp/a-sh-debug.log.$$"
-PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
+#dbg_log="$HOME/tmp/a-sh-debug.log.$$"
+#PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
 version(){
     cat<<EOF_VER
@@ -377,7 +377,7 @@ print_all_xpath(){
 #---------------------------------------------------------------------------------------
 print_unique_xpath(){
     if [ "$uniq_xp" -eq 1 ] ; then
-        sort_unique_keep_order " "
+        sort_unique_keep_order
     else
         cat
     fi
@@ -673,7 +673,7 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
         fi
     fi
 else
-    log_error "No xpath found"
+    log_error "No xpath found\n"
     clean_tmp_files
     exit 127
 fi
