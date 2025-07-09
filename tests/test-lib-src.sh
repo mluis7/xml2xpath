@@ -70,7 +70,7 @@ print_test_descr(){
 }
 
 #---------------------------------------------------------------------------------------
-# Run count test case
+# Run test case
 #---------------------------------------------------------------------------------------
 test_run(){
     if [ ! -f "${test_type_opts[${#test_type_opts[@]} - 1]}" ]; then
@@ -81,6 +81,9 @@ test_run(){
     ../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}" 2>&1 1>>"$TRACE_FILE" | show_errors
 }
 
+#---------------------------------------------------------------------------------------
+# Run count test case
+#---------------------------------------------------------------------------------------
 test_run_count(){
 	if [ ! -f "${test_type_opts[${#test_type_opts[@]} - 1]}" ]; then
         echo_with_pid "ERROR file not found: ${test_type_opts[${#test_type_opts[@]} - 1]}"  | show_color

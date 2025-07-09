@@ -18,7 +18,7 @@ Table of contents
 * [Default namespaces](#default-namespaces)
 * [XPath expressions at a given element](#xpath-expressions-at-a-given-element)
 * [Using found XPaths](#using-found-xpaths)
-* [TL;DR](#tlBdr)
+* [TL;DR](#tldr)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Performance](#performance)
     - [Passing xpath expression of a single element](#passing-xpath-expression-of-a-single-element)
