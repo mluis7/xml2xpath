@@ -18,7 +18,7 @@ Table of contents
 * [Default namespaces](#default-namespaces)
 * [XPath expressions at a given element](#xpath-expressions-at-a-given-element)
 * [Using found XPaths](#using-found-xpaths)
-* [TL;DR](#tldr)
+* [TL;DR](#tlBdr)
 * [Generate an XML from an XSD and show its XPaths](#generate-an-xml-from-an-xsd-and-show-its-xpaths)
 * [Performance](#performance)
     - [Passing xpath expression of a single element](#passing-xpath-expression-of-a-single-element)
@@ -517,4 +517,5 @@ To test the generated man page use:
 `MANPATH="./man" man man/xml2xpath.sh.1`
 
 ## Known issues
-* No one! ... that I know of :-p but [performance](#performance) with big documents can always be an issue.
+* `-p` might give inconsistent namespace prefixes on documents with multiple namespaces.  
+[Performance](#performance) with big documents can always be an issue.
