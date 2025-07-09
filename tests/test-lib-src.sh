@@ -13,7 +13,7 @@ echo_with_pid(){
 #---------------------------------------------------------------------------------------
 # Verify test case result and return result and description
 #---------------------------------------------------------------------------------------
-function test_result(){
+test_result(){
     retval=1
     [ -n "$2" ] && retval="$2"
     
@@ -27,13 +27,13 @@ function test_result(){
     
 }
 
-function show_color(){
+show_color(){
     while read -r line; do 
         echo -e "\e[01;31m$line\e[0m"
     done
 }
 
-function quote_opts(){
+quote_opts(){
     local str=''
     for o in "$@"; do
         if grep -q "^[-][a-z]" <<<"$o"; then
@@ -48,18 +48,19 @@ function quote_opts(){
 #---------------------------------------------------------------------------------------
 # Run test case
 #---------------------------------------------------------------------------------------
-function show_errors(){
+show_errors(){
+	err_pattern='XPath error|No xpath found|Boolean : false'
     if [ "$DBG" -eq 1 ]; then
-        tee /dev/stderr 2> >(show_color) | grep -Eq 'XPath error|No xpath found'
+        tee /dev/stderr 2> >(show_color) | grep -Eq "$err_pattern"
     else
-        grep -Eq 'XPath error|No xpath found'
+        grep -Eq "$err_pattern"
     fi
 }
 
 #---------------------------------------------------------------------------------------
-# Run test case
+# Print test case description
 #---------------------------------------------------------------------------------------
-function print_test_descr(){
+print_test_descr(){
     descr="$1   : ${!1}"
     echo_with_pid "$descr"
     if [ "$DBG" -eq 1 ]; then
@@ -69,21 +70,41 @@ function print_test_descr(){
 }
 
 #---------------------------------------------------------------------------------------
-# Run test case
+# Run count test case
 #---------------------------------------------------------------------------------------
-function test_run(){
+test_run(){
     if [ ! -f "${test_type_opts[${#test_type_opts[@]} - 1]}" ]; then
         echo_with_pid "ERROR file not found: ${test_type_opts[${#test_type_opts[@]} - 1]}"  | show_color
         exit 1
     fi
-    print_test_descr "$1"
-    print_test_descr "$1" >>"$TRACE_FILE"
+    print_test_descr "$1" | tee -a "$TRACE_FILE"
     ../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}" 2>&1 1>>"$TRACE_FILE" | show_errors
+}
+
+test_run_count(){
+	if [ ! -f "${test_type_opts[${#test_type_opts[@]} - 1]}" ]; then
+        echo_with_pid "ERROR file not found: ${test_type_opts[${#test_type_opts[@]} - 1]}"  | show_color
+        exit 1
+    fi
+    print_test_descr "$1" | tee -a "$TRACE_FILE"
+    result=$(../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}")
+	gawk 'BEGIN{RS="\n\n";FS="\n"}
+    {
+        if(NR == 1) printf "%s\n","setrootns"
+        for(i=1; i<=NF; i++) {
+            if($i == "") continue 
+            if($0 ~ /^[^=\/]+=/){
+                printf "%s\n", "setns " $i
+            } else {
+                printf "%s\n", "xpath count(" $i ") > 0"
+            }
+        }
+    }END{ printf "bye\n" }' <<<"$result" | xmllint --shell "${test_type_opts[@]}" 2>&1 | show_errors
 }
 
 #---------------------------------------------------------------------------------------
 # Run test case for duplicates count
 #---------------------------------------------------------------------------------------
-function test_run_count(){
+test_run_basic_count(){
     ../xml2xpath.sh "${test_opts[@]}" "${test_type_opts[@]}" | wc -l
 }

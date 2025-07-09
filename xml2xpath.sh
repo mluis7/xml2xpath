@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.12.2"
+version="0.12.3"
 
 if [ -f "VERSION" ];then
 	read -r version < VERSION
@@ -13,8 +13,8 @@ fi
 
 # Uncomment next 2 lines to write a debug log
 # Warning: it may break some tests
-#dbg_log="$HOME/tmp/a-sh-debug.log.$$"
-#PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
+dbg_log="$HOME/tmp/a-sh-debug.log.$$"
+PS4='+($?):$BASH_SOURCE:${FUNCNAME[0]}:$LINENO:'; exec 2>"$dbg_log"; set -x
 
 version(){
     cat<<EOF_VER
@@ -104,6 +104,7 @@ abs_path=0
 print_tree=0
 quiet=0
 max_elements=1100000
+use_ns=0
 uniq_xp=1
 ns_prefix=''
 defns=''
@@ -196,25 +197,6 @@ is_read_error(){
 }
 
 #---------------------------------------------------------------------------------------
-# Parse namespaces from 'ls /*/namespace::*'
-#   n        1 default -> http://www.w3.org/1999/xhtml
-# to
-#   default=http://www.w3.org/1999/xhtml
-#---------------------------------------------------------------------------------------
-parse_ns_from_xpath(){
-    
-    while read -r -u 3 -t "$rtout" xline || is_read_error "$?" "(parse ns stage1)"; do 
-        printf "%s\n" "$xline"
-        if [ "$xline" == "/ > dir $xuuid" ]; then
-            break 
-        fi 
-    done | sed -E -e :a -e '/^[1-9]/,/^(default|namespace)/ { $!N;s/\n(default|namespace)/¦\1/;ta }' \
-                  -e 's/^([0-9]{1,8}) *ELEMENT *([^ ]*)/\1¦\2/' \
-                  -e 's/(default)? ?namespace ([a-z0-9]+)? ?href=([^=]+)¦?/\1\2=\3/g' \
-                  -e '/^[1-9]/ P;D'
-}
-
-#---------------------------------------------------------------------------------------
 # Sent xmllint shell commands to running instance
 #---------------------------------------------------------------------------------------
 send_cmd(){
@@ -253,27 +235,17 @@ get_xml_tree(){
         
         # send commands to xmllint shell
         set_root_ns >&4
-
-        if [ "$isHtml" -eq 0 ]; then
-            # xpath command contains namespace declaration at the node
-            #   so it will be used to make a lookup array since it provides element index.
-            send_cmd "xpath //*"
-            send_cmd "dir $xuuid"
-            parse_ns_from_xpath
-            send_cmd "dir $xuuid"
-            print_response "$max_elements" "(ns stage1)"
-            
-        else
-            send_cmd "\ndir $xuuid"
-            print_response 2 "(ns stage)"
-        fi
        
         # namespaces at root element
         send_cmd "ls /*/namespace::*[local-name()!='xml' and namespace-uri()!='http://www.w3.org/1999/xhtml']"
         send_cmd "dir $xuuid"
         print_response "$max_elements" "(ns stage2)"
         # namespaces at root element descendants. Provides full length uris.
-        send_cmd "ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*[local-name()!='xml'])]"
+        child_ns_xpath="ls /*//*/namespace::*[local-name()!='xml'][count(./parent::*/namespace::*[local-name()!='xml'])]"
+        if [ "$use_ns" -eq 0 ];then
+        	child_ns_xpath="ls /*/namespace::*[local-name()='$xuuid']"
+        fi
+        send_cmd "$child_ns_xpath"
         send_cmd "dir $xuuid"
         print_response "$max_elements" "(ns stage2)"
         
@@ -303,7 +275,7 @@ set_root_ns(){
         if [ -n "$defns" ] ;then
             echo "setns defaultns="
             OLD_IFS="$IFS"
-            IFS=$'¦' read -r -a extns <<<"$defns"
+            IFS=$'' read -r -a extns <<<"$defns"
             IFS=$"$OLD_IFS"
             for n in "${extns[@]}"; do
                 echo "setns $n"
@@ -328,7 +300,7 @@ make_unique_ns_arr(){
                 elif [ "$ni" -gt 0 ]; then
                     echo "${nsxx}${ni}=${name_uri##*=}"
                 else
-                    echo "${nsxx}=${name_uri##*=}"
+                    echo "${nsxx}${ni}=${name_uri##*=}"
                 fi
                 ((ni=ni+1))
                 ;;
@@ -447,10 +419,6 @@ init_env(){
     else
         xprefix='/'
     fi
-    
-    if [ "$isHtml" -eq 0 ] && [ -z "$ns_prefix" ];then
-        ns_prefix="defaultns"
-    fi
 
     fifo_in="/tmp/xffin.$$"
     fifo_out="/tmp/xffout.$$"
@@ -492,6 +460,7 @@ do
         ;;
     n|p) [ -n "$OPTARG" ] && ns_prefix=$OPTARG && all_opts[${#all_opts[@]}]="-p ; ns prefix=$ns_prefix"
          [ -z "$ns_prefix" ] && ns_prefix="defaultns" && all_opts[${#all_opts[@]}]="-n ; default ns prefix: $ns_prefix"
+         use_ns=1
         ;;
     q) quiet=1
     	;;
@@ -545,16 +514,15 @@ print_separator "${all_opts[@]}"
 # Get XML namespaces and doc tree with xmllint
 # 'dir $xuuid' kinda NoOp that provides a record separator for awk
 IFS=$'¬' read -r -d '' -a xml_info < <( get_xml_tree | awk -v fs="$fs" -v ers="dir $xuuid\n" 'BEGIN{ RS=ers }{ print $0 fs }'  && printf '\0' )
-
 # Put all found namespaces in array as <prefix>=<uri>
-IFS=$'\n' read -r -d '' -a all_ns_arr < <(printf "%s\n" "${xml_info[2]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
-IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort_unique_keep_order)
+IFS=$'\n' read -r -d '' -a all_ns_arr < <(printf "%s\n" "${xml_info[1]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p')
+IFS=$'\n' read -r -d '' -a root_ns_arr < <(printf "%s\n" "${xml_info[0]}" | sed -nE '/^n +1 / s/^n +1 ([^ ]+) -> ([^ ]+)/\1=\2/p' | sort_unique_keep_order)
 root_and_all=( "${root_ns_arr[@]}" )
 root_and_all+=( "${all_ns_arr[@]}" )
 
 declare -a arrns
 #arrns+=( "${root_ns_arr[@]}" )
-arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z";done)"
+arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z" | tr -d '[[:space:]]';done)"
 k=1
 while IFS=$'\n' read -r line;do
     #echo "<<< $k $line '$defns'"
@@ -585,17 +553,19 @@ print_separator
 
 IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${root_and_all[@]}" | make_unique_ns_arr | grep -v '^ *$')
 if [ "${#root_ns_arr[@]}" -gt 0 ] || [ "${#unique_ns_arr[@]}" -gt 0 ];then 
-    print_separator "\nOriginal Namespaces:"
+    print_separator "\nOriginal root Namespaces:"
     print_separator "${root_ns_arr[@]}"
-    print_separator
-    print_separator "\nMapped Namespaces:"
-    print_separator "${unique_ns_arr[@]}"
+    if [ -n "$ns_prefix" ];then
+    	print_separator
+	    print_separator "\nMapped Namespaces:"
+	    printf "%s\n" "${unique_ns_arr[@]}" ""
+	fi
 else
     print_separator "\nNamespaces: None\n"
 fi
 print_separator
 
-xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[3]}")
+xml_tree=$(grep -Ev '^ *$|^\/' <<<"${xml_info[2]}")
 if [ -n "$xml_tree" ];then
     
     # Array with elements like <indent level>¬element, e.g. 3¬thead
@@ -629,15 +599,21 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
                 fi
                 if [ -n "$current_ns" ]; then
                     ns_pfx="$(get_ns_prefix_by_uri "$current_ns")"
-                elif [ -z "$current_ns" ]; then #&& [ -n "$last_dflt_pfx" ]
-                    ns_pfx="$(get_ns_prefix_by_uri "${ns_by_indent_lvl[$prev_lvl]}")"
+                elif [ -z "$current_ns" ]; then
+                	# use uri from -s option if passed
+                	if [ -n "${defns#*=}" ];then
+                		ns_pfx="$(get_ns_prefix_by_uri "${defns#*=}")"
+                	else
+                    	ns_pfx="$(get_ns_prefix_by_uri "${ns_by_indent_lvl[$prev_lvl]}")"
+                    fi
                 fi
+                #printf "%s\n" "$j $indent_lvl $prev_lvl '${arrns[$j]}' '${ns_by_indent_lvl[$indent_lvl]}' '${ns_by_indent_lvl[$prev_lvl]}'"
             else
                 # the element has its own prefix
                 ns_pfx=''
             fi
             # no default namespace declared on current level, reuse previous one
-            if [ -z "${ns_by_indent_lvl[$indent_lvl]}" ];then
+            if [[ -z "${ns_by_indent_lvl[$indent_lvl]}" && -n "${ns_by_indent_lvl[$prev_lvl]}" && "$prev_lvl" -ge 0 ]];then
             	ns_by_indent_lvl[$indent_lvl]="${ns_by_indent_lvl[$prev_lvl]}"
             fi
             if [ -n "$ns_pfx" ];then
@@ -662,7 +638,7 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
             # store current xpath
             xpath_arr[$indent_lvl]="${xpath}"
         fi
-    
+		    
         idx=${#xpath_all[@]}
         xpath_all[$idx]="${xprefix}${xpath}"
     done
