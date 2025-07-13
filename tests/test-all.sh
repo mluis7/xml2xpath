@@ -25,6 +25,8 @@ if [ "$BG" -eq 1 ];then
 	done | sort -k1,2r
 	
 else
+	./test-simple-xml.sh
+	echo -e "$sep"
 	./test-html-base.sh
 	echo -e "$sep"
 	./test-xml-ns-01.sh

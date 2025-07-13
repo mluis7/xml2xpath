@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.12.3"
+version="0.12.4"
 
 if [ -f "VERSION" ];then
 	read -r version < VERSION
@@ -291,7 +291,9 @@ set_root_ns(){
 make_unique_ns_arr(){
     local ni=0
     local nsxx="${ns_prefix}"
-    sort_unique_keep_order | while IFS= read -r name_uri; do
+    printf "%s\n" "${root_and_all[@]}" | sort_unique_keep_order | \
+    while IFS= read -r name_uri; do
+    	#log_error " >>> ${name_uri}\n"
         case "${name_uri%%=*}" in
            default|"${defns%%=*}")
                 # -o ; if uri matches, override ns
@@ -300,7 +302,7 @@ make_unique_ns_arr(){
                 elif [ "$ni" -gt 0 ]; then
                     echo "${nsxx}${ni}=${name_uri##*=}"
                 else
-                    echo "${nsxx}${ni}=${name_uri##*=}"
+                    echo "${nsxx}=${name_uri##*=}"
                 fi
                 ((ni=ni+1))
                 ;;
@@ -310,49 +312,35 @@ make_unique_ns_arr(){
 }
 
 #---------------------------------------------------------------------------------------
-# Find namespace prefix by uri in array from <prefix>=<uri> argument
+# Find namespace prefix by uri in an associative array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
 get_ns_prefix_by_uri(){
-	ns_haystack=("${unique_ns_arr[@]}")
-	if [ "$2" == 'all' ];then
-		ns_haystack=("${all_ns_arr[@]}")
-	fi
+	local query="${1#*=}"
+	if [ -n "$query" ];then
+		if [ -z "${unique_uri_assoc[$query]}" ];then
+			echo "ERROR get_ns_prefix_by_uri. '$1' '$query' '${unique_uri_assoc[$query]}'" > /dev/stderr
+		else
+			echo "${unique_uri_assoc[$query]}"
+		fi
+	fi 
 	
-    for nu in "${ns_haystack[@]}"; do
-	    local query="${1#*=}"
-        local uri="${nu#*=}"
-        local prefix="${nu%=*}"
-        #printf ">>> %s %s %s %s %s\n" "$1" "$uri" "$prefix" "all" 1>&2
-        # Compare uri
-         if [ "${uri}" == "${query}" ]; then
-            # return prefix
-            echo "${prefix}"
-            break
-         elif [[ "${query}" =~ \.\.\.$ ]] && [ "${uri:0:40}" == "${query:0:40}" ];then
-            # should not be needed
-            echo "${prefix}"
-            break
-         fi
-    done
 }
 
 #---------------------------------------------------------------------------------------
 # Find first default namespace prefix in array
 #---------------------------------------------------------------------------------------
-get_default_ns_prefix(){
-    local pfx=''
-    for nu in "${arrns[@]}"; do
-        # Compare prefix
-        patt="^(default|${ns_prefix}[0-9]+)"
-        if [[ "${nu%=*}" =~ $patt ]]; then
-            # return renamed prefix
-            pfx="$(get_ns_prefix_by_uri "${nu}")"
-            if [ -n "$pfx" ];then
-                echo "$pfx:"
-                break
-            fi
-        fi
-    done
+has_default_ns_prefix(){
+	local ns_dflt=''
+	if [ -n "${unique_pfx_assoc['defaultns']}" ]; then
+		ns_dflt="${unique_pfx_assoc['defaultns']}"
+	elif [ -n "${unique_pfx_assoc['defaultns0']}" ]; then
+		ns_dflt="${unique_pfx_assoc['defaultns0']}"
+	elif [ -n "${unique_pfx_assoc['default']}" ]; then
+		ns_dflt="${unique_pfx_assoc['default']}"
+	elif [ -n "$ns_prefix" ] && [ -n "${unique_pfx_assoc[$ns_prefix]}" ]; then
+		ns_dflt="${unique_pfx_assoc[$ns_prefix]}"
+	fi
+	echo "$ns_dflt"
 }
 
 #---------------------------------------------------------------------------------------
@@ -393,10 +381,10 @@ print_unique_xpath(){
 # Field separator defined by fs variable or passed as argument
 #---------------------------------------------------------------------------------------
 sort_unique_keep_order(){
-    ufs="$fs"
-    if [ -n "$1" ];then
-        ufs="$1"
-    fi
+#    ufs="$fs"
+#    if [ -n "$1" ];then
+#        ufs="$1"
+#    fi
     nl -s "$fs" -nln | tr -s -d '\011\r' ' ' | sort -t "$fs" -k2,2 | uniq --skip-fields=1 | sort -t "$fs" -n -k1,1 | cut -d "$fs" -f2,3
 }
 
@@ -522,7 +510,7 @@ root_and_all+=( "${all_ns_arr[@]}" )
 
 declare -a arrns
 #arrns+=( "${root_ns_arr[@]}" )
-arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z" | tr -d '[[:space:]]';done)"
+arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z" | tr -d '[:space:]';done)"
 k=1
 while IFS=$'\n' read -r line;do
     #echo "<<< $k $line '$defns'"
@@ -550,8 +538,17 @@ while IFS=$'\n' read -r line;do
 done < <(printf "%s\n" "${all_ns_arr[@]}")
 print_separator
 # make unique_ns_arr array ready for 'setns'
+IFS=$'\n' read -r -d '' -a unique_ns_arr < <(make_unique_ns_arr | grep -v '^ *$')
 
-IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${root_and_all[@]}" | make_unique_ns_arr | grep -v '^ *$')
+declare -A unique_uri_assoc
+declare -A unique_pfx_assoc
+for uns in "${unique_ns_arr[@]}";do
+	uuri="${uns#*=}"
+	uprefix="${uns%=*}"
+	unique_uri_assoc["$uuri"]="$uprefix"
+	[ -n "$uprefix" ] && unique_pfx_assoc["$uprefix"]="$uuri"
+done
+	
 if [ "${#root_ns_arr[@]}" -gt 0 ] || [ "${#unique_ns_arr[@]}" -gt 0 ];then 
     print_separator "\nOriginal root Namespaces:"
     print_separator "${root_ns_arr[@]}"
@@ -592,7 +589,7 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
 
-            if [ "$line" = "${line%:*}" ] && [ -n "$(get_default_ns_prefix)" ] ;then
+            if [ "$line" = "${line%:*}" ] && [ -n "$(has_default_ns_prefix)" ];then #
             	current_ns="${arrns[$j]}"
             	if [ -z "${ns_by_indent_lvl[$indent_lvl]}" ];then
                 	ns_by_indent_lvl[$indent_lvl]="$current_ns"
@@ -682,4 +679,3 @@ exec 4>&-
 rm $fifo_in
 rm $fifo_out
 echo
-    
