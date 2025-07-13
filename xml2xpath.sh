@@ -5,7 +5,7 @@
 # 
 
 script_name=$(basename "$0")
-version="0.12.3"
+version="0.12.4"
 
 if [ -f "VERSION" ];then
 	read -r version < VERSION
@@ -291,7 +291,9 @@ set_root_ns(){
 make_unique_ns_arr(){
     local ni=0
     local nsxx="${ns_prefix}"
-    sort_unique_keep_order | while IFS= read -r name_uri; do
+    printf "%s\n" "${root_and_all[@]}" | sort_unique_keep_order | \
+    while IFS= read -r name_uri; do
+    	#log_error " >>> ${name_uri}\n"
         case "${name_uri%%=*}" in
            default|"${defns%%=*}")
                 # -o ; if uri matches, override ns
@@ -300,7 +302,7 @@ make_unique_ns_arr(){
                 elif [ "$ni" -gt 0 ]; then
                     echo "${nsxx}${ni}=${name_uri##*=}"
                 else
-                    echo "${nsxx}${ni}=${name_uri##*=}"
+                    echo "${nsxx}=${name_uri##*=}"
                 fi
                 ((ni=ni+1))
                 ;;
@@ -310,11 +312,18 @@ make_unique_ns_arr(){
 }
 
 #---------------------------------------------------------------------------------------
-# Find namespace prefix by uri in array from <prefix>=<uri> argument
+# Find namespace prefix by uri in an associative array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
 get_ns_prefix_by_uri(){
 	local query="${1#*=}"
-	echo "${unique_uri_assoc[$query]}"
+	if [ -n "$query" ];then
+		if [ -z "${unique_uri_assoc[$query]}" ];then
+			echo "ERROR get_ns_prefix_by_uri. '$1' '$query' '${unique_uri_assoc[$query]}'" > /dev/stderr
+		else
+			echo "${unique_uri_assoc[$query]}"
+		fi
+	fi 
+	
 }
 
 #---------------------------------------------------------------------------------------
@@ -328,27 +337,10 @@ has_default_ns_prefix(){
 		ns_dflt="${unique_pfx_assoc['defaultns0']}"
 	elif [ -n "${unique_pfx_assoc['default']}" ]; then
 		ns_dflt="${unique_pfx_assoc['default']}"
-	elif [ -n "${unique_pfx_assoc[$ns_prefix]}" ]; then
+	elif [ -n "$ns_prefix" ] && [ -n "${unique_pfx_assoc[$ns_prefix]}" ]; then
 		ns_dflt="${unique_pfx_assoc[$ns_prefix]}"
 	fi
-	echo ">>>--- '$ns_dflt' '$ns_prefix'" > /dev/stderr
 	echo "$ns_dflt"
-}
-
-get_default_ns_prefix(){
-    local pfx=''
-    for nu in "${arrns[@]}"; do
-        # Compare prefix
-        patt="^(default|${ns_prefix}[0-9]+)"
-        if [[ "${nu%=*}" =~ $patt ]]; then
-            # return renamed prefix
-            pfx="$(get_ns_prefix_by_uri "${nu}")"
-            if [ -n "$pfx" ];then
-                echo "$pfx:"
-                break
-            fi
-        fi
-    done
 }
 
 #---------------------------------------------------------------------------------------
@@ -389,10 +381,10 @@ print_unique_xpath(){
 # Field separator defined by fs variable or passed as argument
 #---------------------------------------------------------------------------------------
 sort_unique_keep_order(){
-    ufs="$fs"
-    if [ -n "$1" ];then
-        ufs="$1"
-    fi
+#    ufs="$fs"
+#    if [ -n "$1" ];then
+#        ufs="$1"
+#    fi
     nl -s "$fs" -nln | tr -s -d '\011\r' ' ' | sort -t "$fs" -k2,2 | uniq --skip-fields=1 | sort -t "$fs" -n -k1,1 | cut -d "$fs" -f2,3
 }
 
@@ -518,7 +510,7 @@ root_and_all+=( "${all_ns_arr[@]}" )
 
 declare -a arrns
 #arrns+=( "${root_ns_arr[@]}" )
-arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z" | tr -d '[[:space:]]';done)"
+arrns[0]="$( for z in "${root_ns_arr[@]}";do [[ "$z" =~ ^default ]] && echo "$z" | tr -d '[:space:]';done)"
 k=1
 while IFS=$'\n' read -r line;do
     #echo "<<< $k $line '$defns'"
@@ -546,8 +538,7 @@ while IFS=$'\n' read -r line;do
 done < <(printf "%s\n" "${all_ns_arr[@]}")
 print_separator
 # make unique_ns_arr array ready for 'setns'
-
-IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${root_and_all[@]}" | make_unique_ns_arr | grep -v '^ *$')
+IFS=$'\n' read -r -d '' -a unique_ns_arr < <(make_unique_ns_arr | grep -v '^ *$')
 
 declare -A unique_uri_assoc
 declare -A unique_pfx_assoc
@@ -555,8 +546,7 @@ for uns in "${unique_ns_arr[@]}";do
 	uuri="${uns#*=}"
 	uprefix="${uns%=*}"
 	unique_uri_assoc["$uuri"]="$uprefix"
-	unique_pfx_assoc["$uprefix"]="$uuri"
-	printf "<<<< %s\n" "'$uuri' '${unique_uri_assoc[$uuri]}'"
+	[ -n "$uprefix" ] && unique_pfx_assoc["$uprefix"]="$uuri"
 done
 	
 if [ "${#root_ns_arr[@]}" -gt 0 ] || [ "${#unique_ns_arr[@]}" -gt 0 ];then 
@@ -689,4 +679,3 @@ exec 4>&-
 rm $fifo_in
 rm $fifo_out
 echo
-    

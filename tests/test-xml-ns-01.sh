@@ -20,6 +20,7 @@ TC02="Replace default namespace definition (-o), relative path (-s)"
 TC03="Find nodes using namespaces (-n)"
 TC04="Find nodes by absolute xpath using namespaces (-a -n)"
 TC05="Count nodes with replaced default namespace definition (-o), relative path (-s)"
+TC06="Relative path (-s) with default namespace"
 
 test_run "TC01"
 test_result "$?"
@@ -46,3 +47,9 @@ test_opts=('-q' '-n' '-o' 'defns=urn:hl7-org:v3' '-s' '//defns:addr')
 #xml2xpath.sh "${test_opts[@]}" -x "$xml_file" | grep -q 'XPath error'
 test_run_count "TC05"
 test_result "$?"
+
+test_opts=(-q -n -s '//defaultns:addr')
+#xml2xpath.sh "${test_opts[@]}" -x "$xml_file" | grep -q 'XPath error'
+test_run "TC06"
+test_result "$?"
+

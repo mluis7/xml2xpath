@@ -4,7 +4,9 @@ Command line XPath expressions generator. Works on XML/HTML files and includes a
 A wrapper around `xmllint` tool that provides convenience options to inspect documents listing namespaces and xpaths expressions.
 By default, shows xpaths expressions starting at the root element but it can start at a predefined element passed from command line as an xpath expression.
 
-<h3> &#x24D8; Check <a href="https://github.com/mluis7/pyxml2xpath">pyxml2xpath</a> python implementation <a href="https://github.com/mluis7/pyxml2xpath">here</a>!</h3>
+| :exclamation:  Python3 implementation available |
+|-------------------------------------------------|
+<h3> &#x24D8; Check <a href="https://github.com/mluis7/pyxml2xpath">pyxml2xpath</a> python implementation as module or CLI <a href="https://github.com/mluis7/pyxml2xpath">here</a>!</h3>
 
 [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate/?hosted_button_id=WBY3Y35L2P7UQ)
 
@@ -517,5 +519,18 @@ To test the generated man page use:
 `MANPATH="./man" man man/xml2xpath.sh.1`
 
 ## Known issues
-* `-p` might give inconsistent namespace prefixes on documents with multiple namespaces.  
+* `-s` used with `-p` does not find xpath expressions when default namespace is NOT declared at root element.  
+Following tests refers to documents in `tests/resources`directory.  
+
+What works:  
+```
+xml2xpath.sh -n -p 'ns' -s "//defaultns:addr" -x tests/resources/HL7.xml
+xml2xpath.sh -n -o 'ns=urn:g' -s '//ns:x' -x tests/resources/ns-with-default.xml
+# -p is ignored
+xml2xpath.sh -n -p "nxx" -o 'ns1=http://example.com/ns1' -s '//ns1:incident' -x tests/resources/soap.xml
+```
+
+What does not work:  
+` xml2xpath.sh -n -p 'ns' -s '//ns:x' -x tests/resources/ns-with-default.xml`
+
 [Performance](#performance) with big documents can always be an issue.
