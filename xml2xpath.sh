@@ -313,32 +313,28 @@ make_unique_ns_arr(){
 # Find namespace prefix by uri in array from <prefix>=<uri> argument
 #---------------------------------------------------------------------------------------
 get_ns_prefix_by_uri(){
-	ns_haystack=("${unique_ns_arr[@]}")
-	if [ "$2" == 'all' ];then
-		ns_haystack=("${all_ns_arr[@]}")
-	fi
-	
-    for nu in "${ns_haystack[@]}"; do
-	    local query="${1#*=}"
-        local uri="${nu#*=}"
-        local prefix="${nu%=*}"
-        #printf ">>> %s %s %s %s %s\n" "$1" "$uri" "$prefix" "all" 1>&2
-        # Compare uri
-         if [ "${uri}" == "${query}" ]; then
-            # return prefix
-            echo "${prefix}"
-            break
-         elif [[ "${query}" =~ \.\.\.$ ]] && [ "${uri:0:40}" == "${query:0:40}" ];then
-            # should not be needed
-            echo "${prefix}"
-            break
-         fi
-    done
+	local query="${1#*=}"
+	echo "${unique_uri_assoc[$query]}"
 }
 
 #---------------------------------------------------------------------------------------
 # Find first default namespace prefix in array
 #---------------------------------------------------------------------------------------
+has_default_ns_prefix(){
+	local ns_dflt=''
+	if [ -n "${unique_pfx_assoc['defaultns']}" ]; then
+		ns_dflt="${unique_pfx_assoc['defaultns']}"
+	elif [ -n "${unique_pfx_assoc['defaultns0']}" ]; then
+		ns_dflt="${unique_pfx_assoc['defaultns0']}"
+	elif [ -n "${unique_pfx_assoc['default']}" ]; then
+		ns_dflt="${unique_pfx_assoc['default']}"
+	elif [ -n "${unique_pfx_assoc[$ns_prefix]}" ]; then
+		ns_dflt="${unique_pfx_assoc[$ns_prefix]}"
+	fi
+	echo ">>>--- '$ns_dflt' '$ns_prefix'" > /dev/stderr
+	echo "$ns_dflt"
+}
+
 get_default_ns_prefix(){
     local pfx=''
     for nu in "${arrns[@]}"; do
@@ -552,6 +548,17 @@ print_separator
 # make unique_ns_arr array ready for 'setns'
 
 IFS=$'\n' read -r -d '' -a unique_ns_arr < <(printf "%s\n" "${root_and_all[@]}" | make_unique_ns_arr | grep -v '^ *$')
+
+declare -A unique_uri_assoc
+declare -A unique_pfx_assoc
+for uns in "${unique_ns_arr[@]}";do
+	uuri="${uns#*=}"
+	uprefix="${uns%=*}"
+	unique_uri_assoc["$uuri"]="$uprefix"
+	unique_pfx_assoc["$uprefix"]="$uuri"
+	printf "<<<< %s\n" "'$uuri' '${unique_uri_assoc[$uuri]}'"
+done
+	
 if [ "${#root_ns_arr[@]}" -gt 0 ] || [ "${#unique_ns_arr[@]}" -gt 0 ];then 
     print_separator "\nOriginal root Namespaces:"
     print_separator "${root_ns_arr[@]}"
@@ -592,7 +599,7 @@ print_separator "\nElements to process (build xpath, add prefix) ${#xml_tree_ilv
             # xpath expression with no prefix so trying to split the line on ':' returns the same line
             # Element might still belong to a default namespace
 
-            if [ "$line" = "${line%:*}" ] && [ -n "$(get_default_ns_prefix)" ] ;then
+            if [ "$line" = "${line%:*}" ] && [ -n "$(has_default_ns_prefix)" ];then #
             	current_ns="${arrns[$j]}"
             	if [ -z "${ns_by_indent_lvl[$indent_lvl]}" ];then
                 	ns_by_indent_lvl[$indent_lvl]="$current_ns"
